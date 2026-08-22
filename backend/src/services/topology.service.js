@@ -148,6 +148,54 @@ export const topologyService = {
     return edge;
   },
 
+  async updateEdge(req, id, changes) {
+    const existing = await topologyRepository.findEdgeById(id);
+    if (!existing) throw new NotFoundError('Conexión no encontrada');
+
+    const fromNodeId = changes.fromNodeId ?? existing.from_node_id;
+    const toNodeId = changes.toNodeId ?? existing.to_node_id;
+
+    if (fromNodeId === toNodeId) {
+      throw new ValidationError('Un nodo no puede conectarse consigo mismo');
+    }
+
+    const [from, to] = await Promise.all([
+      topologyRepository.findNodeById(fromNodeId),
+      topologyRepository.findNodeById(toNodeId),
+    ]);
+    if (!from || !to) throw new NotFoundError('Alguno de los nodos no existe');
+
+    if (fromNodeId !== existing.from_node_id || toNodeId !== existing.to_node_id) {
+      const exists = await topologyRepository.edgeExists(fromNodeId, toNodeId);
+      if (exists) throw new ConflictError('Esa conexión ya existe');
+    }
+
+    const actorId = req.session.userId;
+
+    const edge = await db.transaction(async (trx) => {
+      const updated = await trx('topology_edges')
+        .where({ id })
+        .update({ from_node_id: fromNodeId, to_node_id: toNodeId })
+        .returning(['id', 'from_node_id as from', 'to_node_id as to'])
+        .then(([row]) => row);
+
+      await recordEvent({
+        userId: actorId,
+        action: 'topology.edge.update',
+        resource: 'topology_edge',
+        resourceId: id,
+        result: 'success',
+        req,
+        metadata: { fromNodeId, toNodeId },
+        trx,
+      });
+
+      return updated;
+    });
+
+    return edge;
+  },
+
   async deleteEdge(req, id) {
     const existing = await topologyRepository.findEdgeById(id);
     if (!existing) throw new NotFoundError('Conexión no encontrada');

@@ -24,3 +24,8 @@ export const createEdgeSchema = Joi.object({
   fromNodeId: Joi.string().uuid().required(),
   toNodeId: Joi.string().uuid().required(),
 });
+
+export const updateEdgeSchema = Joi.object({
+  fromNodeId: Joi.string().uuid(),
+  toNodeId: Joi.string().uuid(),
+}).min(1);

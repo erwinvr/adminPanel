@@ -4,7 +4,7 @@ import { authenticate } from '../middleware/authenticate.js';
 import { requirePermission } from '../middleware/requirePermission.js';
 import { validateBody } from '../middleware/validate.js';
 import { PERMISSIONS } from '../permissions/catalog.js';
-import { createNodeSchema, updateNodeSchema, createEdgeSchema } from '../validators/topology.validator.js';
+import { createNodeSchema, updateNodeSchema, createEdgeSchema, updateEdgeSchema } from '../validators/topology.validator.js';
 import * as topologyController from '../controllers/topology.controller.js';
 
 const router = Router();
@@ -32,6 +32,12 @@ router.post(
   requirePermission(PERMISSIONS.TOPOLOGY_EDIT),
   validateBody(createEdgeSchema),
   asyncHandler(topologyController.createEdge)
+);
+router.patch(
+  '/edges/:id',
+  requirePermission(PERMISSIONS.TOPOLOGY_EDIT),
+  validateBody(updateEdgeSchema),
+  asyncHandler(topologyController.updateEdge)
 );
 router.delete('/edges/:id', requirePermission(PERMISSIONS.TOPOLOGY_EDIT), asyncHandler(topologyController.deleteEdge));
 

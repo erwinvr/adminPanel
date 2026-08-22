@@ -71,6 +71,14 @@ export const topologyRepository = {
     return db('topology_edges').where({ id }).first();
   },
 
+  updateEdge(id, changes) {
+    return db('topology_edges')
+      .where({ id })
+      .update(changes)
+      .returning(['id', 'from_node_id as from', 'to_node_id as to'])
+      .then(([row]) => row);
+  },
+
   deleteEdge(id) {
     return db('topology_edges').where({ id }).del();
   },

@@ -25,6 +25,11 @@ export async function createEdge(req, res) {
   res.status(201).json({ success: true, data: edge });
 }
 
+export async function updateEdge(req, res) {
+  const edge = await topologyService.updateEdge(req, req.params.id, req.body);
+  res.status(200).json({ success: true, data: edge });
+}
+
 export async function deleteEdge(req, res) {
   await topologyService.deleteEdge(req, req.params.id);
   res.status(204).send();

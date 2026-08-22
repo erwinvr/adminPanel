@@ -18,6 +18,7 @@ const NAV_ITEMS = [
   { path: '/roles', label: 'Roles y permisos', permission: PERMISSIONS.ROLES_VIEW },
   { path: '/audit', label: 'Auditoría', permission: PERMISSIONS.AUDIT_VIEW },
   { path: '/topology', label: 'Mapa de topología', permission: PERMISSIONS.TOPOLOGY_VIEW },
+  { path: '/topology/admin', label: 'Administración de topología', permission: PERMISSIONS.TOPOLOGY_EDIT },
 ];
 
 /**

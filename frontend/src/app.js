@@ -13,6 +13,7 @@ import { renderUsersPage } from './pages/users.page.js';
 import { renderRolesPage } from './pages/roles.page.js';
 import { renderAuditPage } from './pages/audit.page.js';
 import { renderTopologyPage } from './pages/topology.page.js';
+import { renderTopologyAdminPage } from './pages/topology-admin.page.js';
 import { PERMISSIONS } from './permissions/catalog.js';
 
 registerRoute('/login', { render: renderLoginPage, isPublic: true });
@@ -21,6 +22,7 @@ registerRoute('/users', { render: renderUsersPage, permission: PERMISSIONS.USERS
 registerRoute('/roles', { render: renderRolesPage, permission: PERMISSIONS.ROLES_VIEW });
 registerRoute('/audit', { render: renderAuditPage, permission: PERMISSIONS.AUDIT_VIEW });
 registerRoute('/topology', { render: renderTopologyPage, permission: PERMISSIONS.TOPOLOGY_VIEW });
+registerRoute('/topology/admin', { render: renderTopologyAdminPage, permission: PERMISSIONS.TOPOLOGY_EDIT });
 
 async function bootstrap() {
   await auth.refresh(); // intenta recuperar la sesión desde la cookie existente

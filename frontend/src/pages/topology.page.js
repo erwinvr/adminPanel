@@ -3,33 +3,28 @@
  *
  * Mapa de topología (Criticidad → Aplicación → Base de Datos →
  * Servidor → Datacenter/Nube), persistido en PostgreSQL vía la misma
- * API/sesión/RBAC del resto del panel — reemplaza la versión standalone
- * (artifact con window.storage) por un recurso compartido de equipo.
+ * API/sesión/RBAC del resto del panel.
  *
- * Edición requiere topology.edit; con solo topology.view el mapa se
- * muestra en modo solo-lectura (sin botones de agregar/conectar/borrar).
+ * Es un DASHBOARD de solo visualización + gestión de conexiones entre
+ * cajas ya existentes (resaltar, conectar, desconectar). El alta, baja
+ * y modificación de las cajas en sí vive en el ABM de
+ * topology-admin.page.js (topology.edit) — así el mapa no se satura de
+ * controles de edición de cajas.
+ *
+ * Edición de conexiones requiere topology.edit; con solo topology.view
+ * el mapa se muestra en modo solo-lectura.
  */
 
 import { auth } from '../auth/session.js';
 import { Layout } from '../components/Layout.js';
 import { toast } from '../components/Toast.js';
 import { confirmDialog } from '../components/ConfirmDialog.js';
+import { openModal } from '../components/Modal.js';
+import { Form } from '../components/Form.js';
 import { topologyService } from '../services/topology.service.js';
 import { PERMISSIONS } from '../permissions/catalog.js';
-
-const COLUMNS = [
-  { title: 'Criticidad', color: '#e5484d' },
-  { title: 'Aplicación', color: '#2E74B5' },
-  { title: 'Base de Datos', color: '#d97706' },
-  { title: 'Servidor / Instancia', color: '#059669' },
-  { title: 'Datacenter / Nube', color: '#8b5cf6' },
-];
-const CRIT_LEVELS = [
-  { name: 'Crítico', color: '#e5484d' },
-  { name: 'Alto', color: '#e08a2c' },
-  { name: 'Medio', color: '#d4b106' },
-  { name: 'Bajo', color: '#059669' },
-];
+import { navigate } from '../router/router.js';
+import { COLUMNS } from '../constants/topology.js';
 
 let graph = { nodes: [], edges: [] };
 let selectedNodeId = null;
@@ -46,9 +41,18 @@ export async function renderTopologyPage() {
   content.innerHTML = `
     <h1>Mapa de Topología</h1>
     <p class="topology-page__hint">
-      ${canEdit ? 'Clic en una tarjeta para resaltar sus conexiones. Clic en una línea para eliminarla.' : 'Modo solo lectura — no tienes permiso de edición sobre este mapa.'}
+      ${canEdit ? 'Clic en una tarjeta para resaltar sus conexiones. Usá el ícono &#8646; de cada tarjeta para agregar o quitar sus conexiones. Clic en una línea para eliminarla.' : 'Modo solo lectura — no tienes permiso de edición sobre este mapa.'}
     </p>
   `;
+
+  if (canEdit) {
+    const adminLink = document.createElement('button');
+    adminLink.type = 'button';
+    adminLink.className = 'btn btn--ghost btn--sm';
+    adminLink.textContent = 'Administrar cajas (alta / baja / modificación) →';
+    adminLink.addEventListener('click', () => navigate('/topology/admin'));
+    content.appendChild(adminLink);
+  }
 
   const boardWrap = document.createElement('div');
   boardWrap.id = 'topology-board-wrap';
@@ -67,40 +71,9 @@ export async function renderTopologyPage() {
   boardWrap.appendChild(board);
   content.appendChild(boardWrap);
 
-  let connectPanel = null;
-  if (canEdit) {
-    connectPanel = document.createElement('div');
-    connectPanel.id = 'topology-connect-panel';
-    connectPanel.innerHTML = `
-      <h2>Crear conexión</h2>
-      <div class="topology-connect-row">
-        <select id="topology-sel-from"></select>
-        <span>→</span>
-        <select id="topology-sel-to"></select>
-        <button type="button" class="btn btn--primary" id="topology-btn-connect">Conectar</button>
-      </div>
-    `;
-    content.appendChild(connectPanel);
-  }
-
   root.appendChild(Layout(content));
 
   await refresh();
-
-  if (canEdit) {
-    document.getElementById('topology-btn-connect').addEventListener('click', async () => {
-      const fromNodeId = document.getElementById('topology-sel-from').value;
-      const toNodeId = document.getElementById('topology-sel-to').value;
-      if (!fromNodeId || !toNodeId) return;
-      try {
-        await topologyService.createEdge({ fromNodeId, toNodeId });
-        toast.success('Conexión creada');
-        await refresh();
-      } catch (err) {
-        toast.error(err.message);
-      }
-    });
-  }
 
   window.addEventListener('resize', renderLinks);
 }
@@ -113,7 +86,6 @@ async function refresh() {
     return;
   }
   renderColumns();
-  if (canEdit) renderSelects();
   requestAnimationFrame(renderLinks);
 }
 
@@ -133,49 +105,24 @@ function renderColumns() {
       card.style.setProperty('--c', color);
       card.dataset.id = n.id;
       card.innerHTML = `
-        ${canEdit ? '<div class="topology-card__del" title="Eliminar">&times;</div>' : ''}
+        ${canEdit ? '<div class="topology-card__link" title="Editar conexiones">&#8646;</div>' : ''}
         <div class="topology-card__name">${escapeHtml(n.name)}</div>
         ${n.sub ? `<div class="topology-card__sub">${escapeHtml(n.sub)}</div>` : ''}
       `;
       card.addEventListener('click', (ev) => {
-        if (ev.target.closest('.topology-card__del')) return;
+        if (ev.target.closest('.topology-card__link')) return;
         selectedNodeId = selectedNodeId === n.id ? null : n.id;
         renderColumns();
         renderLinks();
       });
       if (canEdit) {
-        card.querySelector('.topology-card__del').addEventListener('click', async (ev) => {
+        card.querySelector('.topology-card__link').addEventListener('click', (ev) => {
           ev.stopPropagation();
-          const ok = await confirmDialog({
-            title: 'Eliminar nodo',
-            message: `¿Eliminar "${n.name}"? También se eliminarán sus conexiones.`,
-            confirmLabel: 'Eliminar',
-            danger: true,
-          });
-          if (!ok) return;
-          try {
-            await topologyService.deleteNode(n.id);
-            if (selectedNodeId === n.id) selectedNodeId = null;
-            toast.success('Nodo eliminado');
-            await refresh();
-          } catch (err) {
-            toast.error(err.message);
-          }
+          openConnectionsManager(n);
         });
-      }
-      if (canEdit) {
-        card.addEventListener('dblclick', () => startRename(n));
       }
       colEl.appendChild(card);
     });
-
-    if (canEdit) {
-      const addBtn = document.createElement('div');
-      addBtn.className = 'topology-addcard';
-      addBtn.textContent = ci === 0 ? '+ agregar nivel' : `+ agregar ${colDef.title.toLowerCase()}`;
-      addBtn.addEventListener('click', () => showAddForm(ci, colEl, addBtn));
-      colEl.appendChild(addBtn);
-    }
   });
 }
 
@@ -188,85 +135,57 @@ function escapeHtml(s) {
   return (s || '').replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
 }
 
-function showAddForm(col, colEl, addBtn) {
-  const form = document.createElement('div');
-  form.className = 'topology-inline-form';
+function getEdgeBetween(aId, bId) {
+  return graph.edges.find((e) => (e.from === aId && e.to === bId) || (e.from === bId && e.to === aId));
+}
 
-  if (col === 0) {
-    const existingNames = new Set(graph.nodes.filter((n) => n.col === 0).map((n) => n.name));
-    const available = CRIT_LEVELS.filter((l) => !existingNames.has(l.name));
-    if (!available.length) {
-      toast.info('Ya agregaste los 4 niveles de criticidad');
-      return;
-    }
-    form.innerHTML = `
-      <select id="topology-crit-level">${available.map((l) => `<option value="${l.name}">${l.name}</option>`).join('')}</select>
-      <input type="text" placeholder="Detalle (opcional)" id="topology-new-sub">
-      <div class="topology-inline-form__row">
-        <button type="button" class="btn btn--primary btn--sm">Agregar</button>
-        <button type="button" class="btn btn--ghost btn--sm">Cancelar</button>
-      </div>
-    `;
-  } else {
-    form.innerHTML = `
-      <input type="text" placeholder="Nombre" id="topology-new-name" autofocus>
-      <input type="text" placeholder="Detalle (opcional)" id="topology-new-sub">
-      <div class="topology-inline-form__row">
-        <button type="button" class="btn btn--primary btn--sm">Agregar</button>
-        <button type="button" class="btn btn--ghost btn--sm">Cancelar</button>
-      </div>
-    `;
+function openConnectionsManager(node) {
+  const connected = new Set(
+    graph.edges.filter((e) => e.from === node.id || e.to === node.id).map((e) => (e.from === node.id ? e.to : e.from))
+  );
+
+  const groups = COLUMNS
+    .map((c, ci) => ({ ci, title: c.title, nodes: graph.nodes.filter((n) => n.col === ci && n.id !== node.id) }))
+    .filter((g) => g.nodes.length);
+
+  if (!groups.length) {
+    toast.info('No hay otras cajas para conectar');
+    return;
   }
 
-  colEl.replaceChild(form, addBtn);
-  const [okBtn, cancelBtn] = form.querySelectorAll('button');
+  const fields = groups.map((g) => ({
+    name: `col_${g.ci}`,
+    label: g.title,
+    type: 'checkbox-group',
+    options: g.nodes.map((n) => ({ value: n.id, label: n.name })),
+    value: g.nodes.filter((n) => connected.has(n.id)).map((n) => n.id),
+  }));
 
-  okBtn.addEventListener('click', async () => {
-    try {
-      if (col === 0) {
-        const levelName = form.querySelector('#topology-crit-level').value;
-        const level = CRIT_LEVELS.find((l) => l.name === levelName);
-        const sub = form.querySelector('#topology-new-sub').value.trim();
-        await topologyService.createNode({ columnIndex: 0, name: level.name, sub, color: level.color });
-      } else {
-        const name = form.querySelector('#topology-new-name').value.trim();
-        const sub = form.querySelector('#topology-new-sub').value.trim();
-        if (!name) return;
-        await topologyService.createNode({ columnIndex: col, name, sub });
+  const form = Form({
+    fields,
+    submitLabel: 'Guardar conexiones',
+    onSubmit: async (values) => {
+      const selected = new Set(Object.values(values).flat());
+      const toAdd = [...selected].filter((id) => !connected.has(id));
+      const toRemove = [...connected].filter((id) => !selected.has(id));
+
+      for (const otherId of toAdd) {
+        const other = graph.nodes.find((n) => n.id === otherId);
+        const [fromNodeId, toNodeId] = node.col <= other.col ? [node.id, otherId] : [otherId, node.id];
+        await topologyService.createEdge({ fromNodeId, toNodeId });
       }
-      toast.success('Nodo agregado');
+      for (const otherId of toRemove) {
+        const edge = getEdgeBetween(node.id, otherId);
+        if (edge) await topologyService.deleteEdge(edge.id);
+      }
+
+      modal.close();
+      toast.success('Conexiones actualizadas');
       await refresh();
-    } catch (err) {
-      toast.error(err.message);
-    }
+    },
   });
-  cancelBtn.addEventListener('click', () => renderColumns());
-}
 
-async function startRename(node) {
-  const name = prompt('Nuevo nombre:', node.name);
-  if (!name || !name.trim()) return;
-  const sub = prompt('Detalle (opcional):', node.sub || '');
-  try {
-    await topologyService.updateNode(node.id, { name: name.trim(), sub: (sub || '').trim() });
-    toast.success('Nodo actualizado');
-    await refresh();
-  } catch (err) {
-    toast.error(err.message);
-  }
-}
-
-function renderSelects() {
-  const from = document.getElementById('topology-sel-from');
-  const to = document.getElementById('topology-sel-to');
-  if (!from || !to) return;
-  const opts = COLUMNS.map((c, ci) => {
-    const items = graph.nodes.filter((n) => n.col === ci);
-    if (!items.length) return '';
-    return `<optgroup label="${c.title}">${items.map((n) => `<option value="${n.id}">${escapeHtml(n.name)}</option>`).join('')}</optgroup>`;
-  }).join('');
-  from.innerHTML = opts;
-  to.innerHTML = opts;
+  const modal = openModal({ title: `Conexiones de "${node.name}"`, content: form });
 }
 
 function renderLinks() {
