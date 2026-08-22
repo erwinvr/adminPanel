@@ -1,0 +1,23 @@
+# syntax=docker/dockerfile:1
+#
+# Imagen de desarrollo: instala TODAS las dependencias (incluye devDependencies
+# como nodemon/vitest) y corre con hot-reload. No usar en producción —
+# ver Dockerfile (multi-stage) para la imagen de producción.
+#
+# Contexto de build: la RAÍZ del proyecto (ver docker-compose.yml).
+# WORKDIR /backend (no /app): debe coincidir con el nombre real de la
+# carpeta en disco porque knexfile.js y los seeds cruzan a database/ y
+# entre sí con rutas relativas — ver comentario en Dockerfile (prod).
+
+FROM node:24-alpine
+WORKDIR /backend
+
+COPY backend/package.json backend/package-lock.json* ./
+RUN npm install
+
+COPY backend/. .
+COPY database /database
+
+EXPOSE 3000
+
+CMD ["npm", "run", "dev"]

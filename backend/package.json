@@ -1,0 +1,42 @@
+{
+  "name": "app-backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Backend API — autenticación, RBAC granular y auditoría",
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "dev": "nodemon --watch src --watch server.js server.js",
+    "start": "node server.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "migrate:latest": "knex migrate:latest --knexfile src/config/knexfile.js",
+    "migrate:rollback": "knex migrate:rollback --knexfile src/config/knexfile.js",
+    "migrate:make": "knex migrate:make --knexfile src/config/knexfile.js",
+    "seed:run": "knex seed:run --knexfile src/config/knexfile.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "helmet": "^7.1.0",
+    "joi": "^17.13.3",
+    "knex": "^3.1.0",
+    "pg": "^8.13.0",
+    "pino": "^9.4.0",
+    "pino-http": "^10.3.0",
+    "argon2": "^0.41.1",
+    "express-session": "^1.18.1",
+    "connect-pg-simple": "^10.0.0",
+    "express-rate-limit": "^7.4.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.7",
+    "pino-pretty": "^11.2.2",
+    "supertest": "^7.0.0",
+    "vitest": "^2.1.2"
+  }
+}

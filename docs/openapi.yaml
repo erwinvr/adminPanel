@@ -1,0 +1,718 @@
+openapi: 3.0.3
+info:
+  title: Panel de Administración — API
+  version: "1.0.0"
+  description: >
+    API REST de autenticación, RBAC granular, ABM de usuarios/roles y
+    auditoría. Todas las rutas mutantes requieren el header
+    `X-CSRF-Token` (double-submit cookie) además de la cookie de sesión.
+servers:
+  - url: /api
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: sid
+  schemas:
+    Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: VALIDATION_ERROR
+            message:
+              type: string
+            details:
+              type: object
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+        totalPages:
+          type: integer
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        first_name:
+          type: string
+        last_name:
+          type: string
+        username:
+          type: string
+        email:
+          type: string
+        status:
+          type: string
+          enum: [active, inactive, locked]
+        must_change_password:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+    Role:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        is_system:
+          type: boolean
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Permission'
+    Permission:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+          example: users.create
+        module:
+          type: string
+        description:
+          type: string
+    AuditLog:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        occurred_at:
+          type: string
+          format: date-time
+        user_id:
+          type: string
+          format: uuid
+          nullable: true
+        user_username:
+          type: string
+          nullable: true
+        action:
+          type: string
+        resource:
+          type: string
+        resource_id:
+          type: string
+          nullable: true
+        ip_address:
+          type: string
+        result:
+          type: string
+          enum: [success, failure]
+        metadata:
+          type: object
+    TopologyNode:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        col:
+          type: integer
+          minimum: 0
+          maximum: 4
+          description: "0=Criticidad, 1=Aplicación, 2=Base de Datos, 3=Servidor/Instancia, 4=Datacenter/Nube"
+        name:
+          type: string
+        sub:
+          type: string
+          nullable: true
+        color:
+          type: string
+          nullable: true
+    TopologyEdge:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        from:
+          type: string
+          format: uuid
+        to:
+          type: string
+          format: uuid
+    TopologyGraph:
+      type: object
+      properties:
+        nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/TopologyNode'
+        edges:
+          type: array
+          items:
+            $ref: '#/components/schemas/TopologyEdge'
+
+  responses:
+    Unauthorized:
+      description: No autenticado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Autenticado pero sin permisos suficientes
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    ValidationError:
+      description: Datos de entrada no válidos
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+security:
+  - cookieAuth: []
+
+paths:
+  /health:
+    get:
+      summary: Estado de la API y la base de datos
+      security: []
+      responses:
+        '200':
+          description: Todo operativo
+        '503':
+          description: Base de datos no disponible
+
+  /auth/login:
+    post:
+      summary: Iniciar sesión
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identifier, password]
+              properties:
+                identifier:
+                  type: string
+                  description: username o email
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Login exitoso — devuelve el usuario + permisos efectivos
+        '401':
+          description: Credenciales incorrectas o cuenta bloqueada/inactiva
+        '429':
+          description: Demasiados intentos — rate limit excedido
+
+  /auth/logout:
+    post:
+      summary: Cerrar sesión actual
+      responses:
+        '204':
+          description: Sesión cerrada
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/me:
+    get:
+      summary: Usuario actual + permisos efectivos
+      responses:
+        '200':
+          description: Usuario actual
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/User'
+                  - type: object
+                    properties:
+                      permissions:
+                        type: array
+                        items:
+                          type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/change-password:
+    post:
+      summary: Cambiar la propia contraseña (invalida otras sesiones activas)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword:
+                  type: string
+                newPassword:
+                  type: string
+                  minLength: 12
+      responses:
+        '204':
+          description: Contraseña actualizada
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /auth/password-reset/request:
+    post:
+      summary: Solicitar recuperación de contraseña (siempre responde éxito genérico)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+      responses:
+        '200':
+          description: Mensaje genérico (exista o no el email)
+        '429':
+          description: Rate limit excedido
+
+  /auth/password-reset/confirm:
+    post:
+      summary: Confirmar recuperación con el token recibido (invalida TODAS las sesiones del usuario)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, newPassword]
+              properties:
+                token:
+                  type: string
+                newPassword:
+                  type: string
+                  minLength: 12
+      responses:
+        '204':
+          description: Contraseña restablecida
+        '422':
+          description: Token inválido, expirado o ya usado
+
+  /users:
+    get:
+      summary: Listar usuarios (paginado, con búsqueda y filtros)
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: pageSize
+          schema: { type: integer, default: 20, maximum: 100 }
+        - in: query
+          name: search
+          schema: { type: string }
+        - in: query
+          name: status
+          schema: { type: string, enum: [active, inactive, locked] }
+        - in: query
+          name: sortBy
+          schema: { type: string, enum: [created_at, username, email, last_name, status] }
+        - in: query
+          name: sortDir
+          schema: { type: string, enum: [asc, desc] }
+      responses:
+        '200':
+          description: Listado paginado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/User' }
+                  meta:
+                    type: object
+                    properties:
+                      pagination: { $ref: '#/components/schemas/Pagination' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      summary: Crear usuario (requiere users.create)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [firstName, lastName, username, email, initialPassword]
+              properties:
+                firstName: { type: string }
+                lastName: { type: string }
+                username: { type: string }
+                email: { type: string, format: email }
+                initialPassword: { type: string, minLength: 12 }
+                roleIds:
+                  type: array
+                  items: { type: string, format: uuid }
+      responses:
+        '201':
+          description: Usuario creado
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: Username o email ya existe
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /users/{id}:
+    get:
+      summary: Obtener un usuario por ID (requiere users.view)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Usuario encontrado
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: No encontrado
+    patch:
+      summary: Modificar un usuario (requiere users.update)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                firstName: { type: string }
+                lastName: { type: string }
+                email: { type: string, format: email }
+                status: { type: string, enum: [active, inactive] }
+                roleIds:
+                  type: array
+                  items: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Usuario actualizado
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: No encontrado
+        '409':
+          description: Email ya en uso por otro usuario
+    delete:
+      summary: Desactivar usuario — soft delete (requiere users.delete)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204':
+          description: Usuario desactivado
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: No encontrado
+        '422':
+          description: No se puede desactivar el propio usuario
+
+  /roles:
+    get:
+      summary: Listar roles con sus permisos (requiere roles.view)
+      responses:
+        '200':
+          description: Listado de roles
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Role' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      summary: Crear rol (requiere roles.create)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                description: { type: string }
+                permissionIds:
+                  type: array
+                  items: { type: string, format: uuid }
+      responses:
+        '201':
+          description: Rol creado
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: Ya existe un rol con ese nombre
+
+  /roles/{id}:
+    get:
+      summary: Obtener un rol por ID (requiere roles.view)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Rol encontrado
+        '404':
+          description: No encontrado
+    patch:
+      summary: Modificar descripción/permisos de un rol (requiere roles.update)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                description: { type: string }
+                permissionIds:
+                  type: array
+                  items: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Rol actualizado
+        '404':
+          description: No encontrado
+    delete:
+      summary: Eliminar rol (requiere roles.delete; no aplica a roles de sistema ni con usuarios asignados)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204':
+          description: Rol eliminado
+        '404':
+          description: No encontrado
+        '409':
+          description: Hay usuarios con este rol asignado
+        '422':
+          description: Es un rol de sistema, no se puede eliminar
+
+  /permissions:
+    get:
+      summary: Catálogo completo de permisos (requiere permissions.view)
+      responses:
+        '200':
+          description: Catálogo de permisos
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Permission' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /audit-logs:
+    get:
+      summary: Consultar el registro de auditoría (requiere audit.view)
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: pageSize
+          schema: { type: integer, default: 20, maximum: 100 }
+        - in: query
+          name: userId
+          schema: { type: string, format: uuid }
+        - in: query
+          name: action
+          schema: { type: string }
+        - in: query
+          name: resource
+          schema: { type: string }
+        - in: query
+          name: from
+          schema: { type: string, format: date-time }
+        - in: query
+          name: to
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: Registro de auditoría paginado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/AuditLog' }
+                  meta:
+                    type: object
+                    properties:
+                      pagination: { $ref: '#/components/schemas/Pagination' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /topology:
+    get:
+      summary: Obtener el grafo completo (nodos + conexiones) (requiere topology.view)
+      responses:
+        '200':
+          description: Grafo completo
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { $ref: '#/components/schemas/TopologyGraph' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /topology/nodes:
+    post:
+      summary: Crear un nodo (requiere topology.edit)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [columnIndex, name]
+              properties:
+                columnIndex: { type: integer, minimum: 0, maximum: 4 }
+                name: { type: string }
+                sub: { type: string }
+                color:
+                  type: string
+                  description: Hex de 6 dígitos, ej. "#e5484d"
+      responses:
+        '201':
+          description: Nodo creado
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /topology/nodes/{id}:
+    patch:
+      summary: Modificar un nodo (requiere topology.edit)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                sub: { type: string }
+                color: { type: string }
+      responses:
+        '200':
+          description: Nodo actualizado
+        '404':
+          description: No encontrado
+    delete:
+      summary: Eliminar un nodo — arrastra sus conexiones (requiere topology.edit)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204':
+          description: Nodo eliminado
+        '404':
+          description: No encontrado
+
+  /topology/edges:
+    post:
+      summary: Crear una conexión entre dos nodos (requiere topology.edit)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fromNodeId, toNodeId]
+              properties:
+                fromNodeId: { type: string, format: uuid }
+                toNodeId: { type: string, format: uuid }
+      responses:
+        '201':
+          description: Conexión creada
+        '404':
+          description: Alguno de los nodos no existe
+        '409':
+          description: Esa conexión ya existe
+        '422':
+          description: Un nodo no puede conectarse consigo mismo
+
+  /topology/edges/{id}:
+    delete:
+      summary: Eliminar una conexión (requiere topology.edit)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204':
+          description: Conexión eliminada
+        '404':
+          description: No encontrada

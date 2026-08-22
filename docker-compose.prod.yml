@@ -1,0 +1,68 @@
+# docker-compose.prod.yml — despliegue on-prem.
+#
+# Uso: docker compose -f docker-compose.prod.yml up -d --build
+#
+# Diferencias clave frente a docker-compose.yml (dev):
+#  - El backend usa la imagen multi-stage de producción (Dockerfile), sin
+#    devDependencies ni bind mounts del código fuente.
+#  - PostgreSQL NO expone su puerto al host: solo es alcanzable desde la
+#    red interna de Docker Compose.
+#  - nginx sirve HTTPS (nginx.prod.conf) y es el único servicio con
+#    puertos publicados al host.
+#  - El respaldo de datos queda fuera de alcance de este compose (se
+#    resuelve a nivel de snapshot/backup de la VM completa).
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-app_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-app_db}
+    volumes:
+      - db_data_prod:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-app_user} -d ${POSTGRES_DB:-app_db}']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    # Sin "ports": la base de datos solo es accesible dentro de la red
+    # interna de este compose (desde el servicio "backend").
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:3000/api/health || exit 1']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    # Sin "ports": solo nginx llega al backend, vía la red interna
+    # (hostname "backend", resuelto automáticamente por Docker Compose).
+
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+      - ./nginx/nginx.prod.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+    ports:
+      - '80:80'
+      - '443:443'
+    depends_on:
+      - backend
+
+volumes:
+  db_data_prod:

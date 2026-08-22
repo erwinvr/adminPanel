@@ -1,0 +1,56 @@
+# docker-compose.yml — entorno de DESARROLLO local.
+# Hot-reload en el backend, puertos de BD y API expuestos al host para
+# depuración directa. NO usar esta configuración en producción — ver
+# docker-compose.prod.yml.
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: app_user
+      POSTGRES_PASSWORD: dev_only_password_change_me
+      POSTGRES_DB: app_db
+    volumes:
+      - db_data_dev:/var/lib/postgresql/data
+    ports:
+      - '5432:5432' # solo en dev, para conectar con un cliente SQL local
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U app_user -d app_db']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile.dev
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgres://app_user:dev_only_password_change_me@db:5432/app_db
+    volumes:
+      - ./backend:/backend
+      - ./database:/database # migraciones/seeds visibles sin reconstruir la imagen
+      - backend_node_modules:/backend/node_modules # evita que node_modules del host pise el del contenedor
+    ports:
+      - '3000:3000' # solo en dev, para probar la API directamente sin pasar por nginx
+    depends_on:
+      db:
+        condition: service_healthy
+
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - '8080:80'
+    depends_on:
+      - backend
+
+volumes:
+  db_data_dev:
+  backend_node_modules:
