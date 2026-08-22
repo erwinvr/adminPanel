@@ -330,3 +330,8 @@ Páginas implementadas: login, dashboard, usuarios (listado + alta +
 edición + desactivación), roles (listado + alta + edición + asignación
 de permisos), auditoría (listado filtrable), mapa de topología
 (visual + edición en línea).
+
+docker compose -f docker-compose.prod.yml down
+docker compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yml exec backend npm run migrate:latest
+docker compose -f docker-compose.prod.yml exec backend npm run seed:run
