@@ -24,6 +24,9 @@ build/
 # Datos de PostgreSQL persistidos por Docker (bind mounts locales, si se usan)
 database/pgdata/
 
+# Certificados TLS (no versionar)
+nginx/certs/*.pem
+
 # Editor / OS
 .vscode/
 .idea/
