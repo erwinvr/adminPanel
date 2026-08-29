@@ -2,6 +2,14 @@
 # Hot-reload en el backend, puertos de BD y API expuestos al host para
 # depuración directa. NO usar esta configuración en producción — ver
 # docker-compose.prod.yml.
+#
+# El frontend (React + Vite) ya NO tiene hot-reload acá: `nginx` ahora
+# construye su imagen desde frontend/Dockerfile (build de producción de
+# Vite), así que hace falta `docker compose up --build` para ver
+# cambios de frontend. Para iterar rápido en frontend, corré
+# `cd frontend && npm install && npm run dev` en el host — apunta por
+# proxy al backend expuesto acá abajo en localhost:3000 (ver
+# frontend/vite.config.js) sin pasar por Docker en absoluto.
 
 services:
   db:
@@ -41,10 +49,11 @@ services:
         condition: service_healthy
 
   nginx:
-    image: nginx:alpine
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
     restart: unless-stopped
     volumes:
-      - ./frontend:/usr/share/nginx/html:ro
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
       - '8080:80'

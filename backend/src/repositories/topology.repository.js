@@ -19,6 +19,10 @@ export const topologyRepository = {
     return db('topology_nodes').where({ id }).first();
   },
 
+  findNodesByIds(ids) {
+    return db('topology_nodes').whereIn('id', ids).select('id', 'column_index as col', 'name');
+  },
+
   countNodesInColumn(columnIndex) {
     return db('topology_nodes')
       .where({ column_index: columnIndex })

@@ -1,46 +1,101 @@
 /*
- * main.css — reset mínimo y variables de diseño base.
- * Los estilos específicos de cada componente/página se agregan en fases
- * posteriores (Fase 8 — Frontend), como archivos separados importados
- * desde aquí, no acumulados en este archivo.
+ * main.css
+ *
+ * Tailwind v4 (CSS-first, sin tailwind.config.js) + tokens de tema de
+ * shadcn/ui, reutilizando la paleta de color que ya tenía la app (azul
+ * como --primary, mismos grises) en vez del tema neutro por defecto de
+ * shadcn — así el "mejorar el estilo visual" upgradea la calidad de los
+ * componentes (Radix + Tailwind) sin cambiar la identidad de color.
+ *
+ * Los componentes genéricos (botones, tablas, formularios, modales,
+ * toasts) ya NO tienen clases propias acá — son componentes de
+ * src/components/ui/ (shadcn) estilados con clases de Tailwind
+ * directamente en su JSX. Lo que queda en este archivo es: el reset de
+ * doc/body, los tokens de tema, y estilos bien específicos de una sola
+ * pantalla (el mapa de topología) que por su layout a medida no encajan
+ * en ningún componente shadcn genérico.
  */
 
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
 :root {
-  --color-bg: #f5f6f8;
-  --color-surface: #ffffff;
-  --color-border: #d9dde3;
-  --color-text: #1a1f29;
-  --color-text-muted: #5b6472;
-  --color-primary: #2e74b5;
-  --color-primary-hover: #1f4e79;
-  --color-danger: #c0392b;
-  --color-success: #1e8449;
-  --radius: 6px;
-  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --radius: 0.5rem;
+
+  --background: #f5f6f8;
+  --foreground: #1a1f29;
+  --card: #ffffff;
+  --card-foreground: #1a1f29;
+  --popover: #ffffff;
+  --popover-foreground: #1a1f29;
+  --primary: #2e74b5;
+  --primary-foreground: #ffffff;
+  --secondary: #eef2f6;
+  --secondary-foreground: #1a1f29;
+  --muted: #eef2f6;
+  --muted-foreground: #5b6472;
+  --accent: #eef2f6;
+  --accent-foreground: #1a1f29;
+  --destructive: #c0392b;
+  --destructive-foreground: #ffffff;
+  --success: #1e8449;
+  --success-foreground: #ffffff;
+  --border: #d9dde3;
+  --input: #d9dde3;
+  --ring: #2e74b5;
+  --sidebar: #1f4e79;
+  --sidebar-foreground: #dce6f0;
+
+  /* Tokens "legacy" — usados todavía por el layout a medida del mapa de
+     topología (más abajo), que no pasó a componentes shadcn genéricos. */
+  --color-primary: var(--primary);
+  --color-border: var(--border);
+  --color-text-muted: var(--muted-foreground);
+  --color-danger: var(--destructive);
+  --color-surface: var(--card);
 }
 
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
-
-html,
 body {
-  margin: 0;
-  padding: 0;
-  height: 100%;
-}
-
-body {
-  font-family: var(--font-sans);
-  background: var(--color-bg);
-  color: var(--color-text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--background);
+  color: var(--foreground);
   font-size: 14px;
   line-height: 1.5;
 }
 
-#app {
+#root {
   min-height: 100vh;
 }
 
@@ -52,152 +107,8 @@ body {
   color: var(--color-text-muted);
 }
 
-a {
-  color: var(--color-primary);
-}
-
-button {
-  font-family: inherit;
-}
-
-/* ============ Botones ============ */
-.btn {
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  color: var(--color-text);
-  padding: 8px 14px;
-  border-radius: var(--radius);
-  cursor: pointer;
-  font-size: 13px;
-}
-.btn:hover { border-color: var(--color-primary); }
-.btn:disabled { opacity: .5; cursor: not-allowed; }
-.btn--primary { background: var(--color-primary); border-color: var(--color-primary); color: #fff; }
-.btn--primary:hover { background: var(--color-primary-hover); }
-.btn--danger { background: var(--color-danger); border-color: var(--color-danger); color: #fff; }
-.btn--ghost { background: transparent; }
-.btn--sm { padding: 4px 10px; font-size: 12px; margin-right: 6px; }
-
-/* ============ Layout ============ */
-.layout { display: flex; min-height: 100vh; }
-.layout__sidebar {
-  width: 220px; background: var(--color-primary-hover); color: #fff;
-  display: flex; flex-direction: column; padding: 16px 0; flex-shrink: 0;
-}
-.layout__brand { padding: 0 16px 16px; font-weight: 600; border-bottom: 1px solid rgba(255,255,255,.15); margin-bottom: 8px; }
-.layout__nav-link { color: #dce6f0; padding: 10px 16px; text-decoration: none; font-size: 14px; }
-.layout__nav-link:hover, .layout__nav-link--active { background: rgba(255,255,255,.12); color: #fff; }
-.layout__main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-.layout__topbar {
-  display: flex; justify-content: flex-end; align-items: center; gap: 16px;
-  padding: 12px 24px; background: var(--color-surface); border-bottom: 1px solid var(--color-border);
-}
-.layout__content { padding: 24px; flex: 1; }
-
-/* ============ Auth page ============ */
-.auth-page { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
-.auth-page__card {
-  background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius);
-  padding: 32px; width: 340px;
-}
-
-/* ============ Toolbar ============ */
-.toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 16px 0; }
-.toolbar input[type="search"], .toolbar input[type="text"] {
-  padding: 8px 10px; border: 1px solid var(--color-border); border-radius: var(--radius); min-width: 260px;
-}
-
-/* ============ Tabla ============ */
-.data-table { width: 100%; border-collapse: collapse; background: var(--color-surface); }
-.data-table th, .data-table td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--color-border); font-size: 13px; }
-.data-table th { color: var(--color-text-muted); font-weight: 600; }
-.data-table__empty { text-align: center; color: var(--color-text-muted); padding: 24px; }
-.data-table__actions { white-space: nowrap; }
-
-/* ============ Paginación ============ */
-.pagination { display: flex; align-items: center; gap: 12px; justify-content: center; margin-top: 16px; }
-.pagination__label { color: var(--color-text-muted); font-size: 13px; }
-
-/* ============ Badges ============ */
-.badge { padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
-.badge--active, .badge--success { background: #d4f4dd; color: var(--color-success); }
-.badge--inactive, .badge--failure { background: #fde2e1; color: var(--color-danger); }
-.badge--locked { background: #fde2e1; color: var(--color-danger); }
-
-/* ============ Formularios ============ */
-.form { display: flex; flex-direction: column; gap: 14px; }
-.form__group { display: flex; flex-direction: column; gap: 4px; }
-.form__group label { font-size: 12.5px; font-weight: 600; color: var(--color-text-muted); }
-.form__group input, .form__group select {
-  padding: 8px 10px; border: 1px solid var(--color-border); border-radius: var(--radius); font-size: 14px;
-}
-.form__checkbox-group { display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto; border: 1px solid var(--color-border); border-radius: var(--radius); padding: 8px; }
-.form__checkbox { font-size: 13px; font-weight: 400; display: flex; align-items: center; gap: 6px; }
-.form__error { color: var(--color-danger); font-size: 13px; }
-
-/* ============ Modal / Dialog ============ */
-dialog { border: none; border-radius: var(--radius); padding: 0; max-width: 480px; width: 90%; }
-dialog::backdrop { background: rgba(0,0,0,.4); }
-.modal__header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--color-border); }
-.modal__close { background: none; border: none; font-size: 22px; cursor: pointer; color: var(--color-text-muted); }
-.modal__body { padding: 20px; }
-.confirm-dialog { padding: 20px; }
-.confirm-dialog__actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
-
-/* ============ Toasts ============ */
-.toast-container { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 1000; }
-.toast {
-  background: var(--color-text); color: #fff; padding: 10px 16px; border-radius: var(--radius);
-  font-size: 13px; opacity: 0; transform: translateY(8px); transition: all .2s;
-}
-.toast--visible { opacity: 1; transform: translateY(0); }
-.toast--success { background: var(--color-success); }
-.toast--error { background: var(--color-danger); }
-
-/* ============ Alertas ============ */
-.alert { padding: 10px 14px; border-radius: var(--radius); font-size: 13px; margin: 12px 0; }
-.alert--error { background: #fde2e1; color: var(--color-danger); }
-.alert--warning { background: #fff3cd; color: #8a6100; }
-
 /* ============ Mapa de Topología ============ */
 .topology-page__hint { color: var(--color-text-muted); font-size: 12.5px; margin: -8px 0 16px; }
-#topology-board-wrap { position: relative; overflow-x: auto; padding-bottom: 10px; }
-#topology-board {
-  position: relative; display: grid;
-  grid-template-columns: repeat(5, 200px);
-  gap: 48px; min-width: 1240px;
-}
-#topology-links { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
-
-.topology-col { position: relative; z-index: 2; display: flex; flex-direction: column; gap: 8px; min-height: 60px; }
-.topology-col__head {
-  display: flex; align-items: center; justify-content: space-between;
-  font-size: 11px; letter-spacing: .04em; color: var(--color-text-muted); text-transform: uppercase;
-  font-weight: 700; padding-bottom: 6px; border-bottom: 1px solid var(--color-border); margin-bottom: 4px;
-}
-.topology-col__count { font-weight: 400; }
-
-.topology-card {
-  background: var(--color-surface); border: 1px solid var(--color-border); border-left: 3px solid var(--c, var(--color-primary));
-  border-radius: var(--radius); padding: 8px 10px; position: relative; cursor: pointer; transition: .15s;
-}
-.topology-card:hover { border-color: var(--c, var(--color-primary)); box-shadow: 0 1px 4px rgba(0,0,0,.06); }
-.topology-card--dim { opacity: .3; }
-.topology-card--selected { outline: 2px solid var(--c, var(--color-primary)); }
-.topology-card__name { font-weight: 600; font-size: 13px; padding-right: 20px; }
-.topology-card__sub { font-size: 11px; color: var(--color-text-muted); margin-top: 2px; }
-.topology-card__link {
-  position: absolute; top: 6px; right: 6px; width: 16px; height: 16px; border-radius: 4px;
-  display: flex; align-items: center; justify-content: center; color: var(--color-text-muted);
-  font-size: 12px; opacity: 0; transition: .15s;
-}
-.topology-card:hover .topology-card__link { opacity: 1; }
-.topology-card__link:hover { color: var(--color-primary); }
-
-path.topology-link { fill: none; stroke-width: 1.6; opacity: .55; transition: .15s; cursor: pointer; pointer-events: stroke; }
-path.topology-link:hover { opacity: 1; stroke-width: 2.4; }
-path.topology-link--dim { opacity: .08; }
-path.topology-link--hl { opacity: 1; stroke-width: 2.4; }
 
 .topology-admin__swatch {
   display: inline-block; width: 18px; height: 18px; border-radius: 4px; border: 1px solid var(--color-border);

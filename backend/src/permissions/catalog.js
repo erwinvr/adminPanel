@@ -25,6 +25,15 @@ export const PERMISSIONS = Object.freeze({
 
   TOPOLOGY_VIEW: 'topology.view',
   TOPOLOGY_EDIT: 'topology.edit',
+
+  PROVIDERS_VIEW: 'providers.view',
+  PROVIDERS_EDIT: 'providers.edit',
+
+  LICENSES_VIEW: 'licenses.view',
+  LICENSES_EDIT: 'licenses.edit',
+
+  M365_VIEW: 'm365.view',
+  M365_EDIT: 'm365.edit',
 });
 
 /**
@@ -48,4 +57,13 @@ export const PERMISSION_DEFINITIONS = [
 
   { code: PERMISSIONS.TOPOLOGY_VIEW, module: 'topology', description: 'Ver el mapa de topología de aplicaciones' },
   { code: PERMISSIONS.TOPOLOGY_EDIT, module: 'topology', description: 'Editar nodos y conexiones del mapa de topología' },
+
+  { code: PERMISSIONS.PROVIDERS_VIEW, module: 'providers', description: 'Ver proveedores y sus aplicaciones vinculadas' },
+  { code: PERMISSIONS.PROVIDERS_EDIT, module: 'providers', description: 'Crear, editar y eliminar proveedores; vincular aplicaciones' },
+
+  { code: PERMISSIONS.LICENSES_VIEW, module: 'licenses', description: 'Ver el listado de licencias' },
+  { code: PERMISSIONS.LICENSES_EDIT, module: 'licenses', description: 'Crear, editar y eliminar licencias' },
+
+  { code: PERMISSIONS.M365_VIEW, module: 'm365', description: 'Ver licencias y usuarios sincronizados desde Microsoft 365' },
+  { code: PERMISSIONS.M365_EDIT, module: 'm365', description: 'Configurar la conexión a Microsoft 365 y disparar la sincronización' },
 ];

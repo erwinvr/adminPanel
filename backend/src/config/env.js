@@ -51,6 +51,16 @@ const schema = Joi.object({
 
   ACCOUNT_LOCK_MAX_FAILED_ATTEMPTS: Joi.number().integer().positive().default(5),
   ACCOUNT_LOCK_DURATION_MS: Joi.number().integer().positive().default(15 * 60 * 1000),
+
+  // Clave simétrica para cifrar en reposo el client secret de Microsoft 365
+  // (AES-256-GCM, ver utils/crypto.js) — nunca se guarda en texto plano
+  // porque hace falta descifrarlo para llamar a Microsoft Graph en cada sync.
+  M365_ENCRYPTION_KEY: Joi.string().hex().length(64).required().messages({
+    'string.length':
+      'M365_ENCRYPTION_KEY debe ser una clave hex de 64 caracteres (32 bytes, AES-256). Generar con: ' +
+      'node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"',
+    'string.hex': 'M365_ENCRYPTION_KEY debe estar en formato hexadecimal',
+  }),
 }).unknown(true); // permite otras variables del sistema sin rechazarlas
 
 const { value: validatedEnv, error } = schema.validate(process.env, {
@@ -96,4 +106,6 @@ export const env = {
     maxFailedAttempts: validatedEnv.ACCOUNT_LOCK_MAX_FAILED_ATTEMPTS,
     durationMs: validatedEnv.ACCOUNT_LOCK_DURATION_MS,
   },
+
+  m365EncryptionKey: validatedEnv.M365_ENCRYPTION_KEY,
 };

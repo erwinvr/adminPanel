@@ -30,9 +30,12 @@ acciones administrativas.
                                                                   └──────────────────┘
 ```
 
-El frontend (JavaScript Vanilla, ES Modules, sin build step) nunca
-llama directamente a la base de datos ni conoce el hostname del backend:
-todo pasa por rutas relativas `/api/...` que nginx redirige internamente.
+El frontend (React + Vite, ver sección 15) nunca llama directamente a
+la base de datos ni conoce el hostname del backend: todo pasa por
+rutas relativas `/api/...` que nginx redirige internamente. `nginx`
+sirve el build estático de Vite (horneado en su imagen por
+`frontend/Dockerfile`) — ya no hay bind mount del código fuente del
+frontend ni servido de `.js` sueltos.
 
 Capas del backend: `routes → middleware → controllers → services →
 repositories → base de datos`. Los controllers son delgados; la lógica de
@@ -132,10 +135,14 @@ npm run migrate:latest
 npm run dev
 ```
 
-El frontend puede servirse con cualquier servidor estático apuntando a
-`frontend/` (ej. `npx serve frontend`), pero para que `/api/*` resuelva
-correctamente sin configurar CORS adicional se recomienda siempre pasar
-por el nginx de `docker compose up`.
+Para el frontend, con hot-reload real (a diferencia de `docker compose up`,
+que ahora reconstruye una imagen estática — ver sección 15):
+
+```bash
+cd frontend
+npm install
+npm run dev   # Vite, con proxy de /api hacia localhost:3000 (backend expuesto arriba)
+```
 
 ## 6. Migraciones y seeds
 
@@ -171,14 +178,19 @@ correrlos.
 ```
 project/
 ├── frontend/
-│   ├── public/index.html       # documento raíz servido por nginx
+│   ├── index.html               # documento raíz de Vite (referencia src/main.jsx)
+│   ├── Dockerfile                # build multi-stage: npm run build -> sirve con nginx
+│   ├── vite.config.js
 │   └── src/
-│       ├── api/httpClient.js   # único punto que hace fetch()
-│       ├── services/           # traducen operaciones de negocio a llamadas HTTP
-│       ├── components/         # (Fase 8) tablas, modales, formularios reutilizables
-│       ├── pages/               # (Fase 8) login, dashboard, usuarios, roles...
-│       ├── auth/                 # (Fase 3/4) estado de sesión, hasPermission()
-│       ├── permissions/           # (Fase 4) catálogo de constantes de permisos
+│       ├── main.jsx              # entrypoint: monta <App/> con los providers
+│       ├── App.jsx               # rutas (react-router-dom) + guardas de permiso
+│       ├── api/httpClient.js     # único punto que hace fetch()
+│       ├── services/             # traducen operaciones de negocio a llamadas HTTP
+│       ├── context/              # AuthContext, ToastContext, ConfirmContext
+│       ├── components/           # DataTable, Form, Modal, Layout, Pagination (React)
+│       ├── pages/                 # login, dashboard, usuarios, roles, topología...
+│       ├── permissions/           # catálogo de constantes de permisos
+│       ├── constants/             # constantes de dominio (ej. columnas de topología)
 │       └── styles/main.css
 │
 ├── backend/
@@ -320,16 +332,57 @@ misma sesión/CSRF/RBAC del resto del panel:
 
 ## 15. Frontend
 
-JavaScript Vanilla + ES Modules, sin build step. Router basado en hash
-(`#/usuarios`, `#/roles`, etc.), con guardas de autenticación y permiso
-por ruta (solo UX — el backend siempre revalida). Componentes
-reutilizables en `frontend/src/components/`: `DataTable`, `Form`,
-`Modal`, `ConfirmDialog`, `Toast`, `Pagination`, `Layout`.
+React 18 + Vite (`frontend/package.json`, `frontend/vite.config.js`) +
+**Tailwind CSS v4 y shadcn/ui** para la UI. `HashRouter` de
+`react-router-dom` (`#/usuarios`, `#/roles`, etc.), con
+`<ProtectedRoute>` por permiso (solo UX — el backend siempre revalida
+cada request).
 
-Páginas implementadas: login, dashboard, usuarios (listado + alta +
-edición + desactivación), roles (listado + alta + edición + asignación
-de permisos), auditoría (listado filtrable), mapa de topología
-(visual + edición en línea).
+- **UI**: Tailwind v4 (CSS-first, sin `tailwind.config.js` — ver el
+  `@theme inline` al inicio de `frontend/src/styles/main.css`) +
+  componentes de shadcn/ui (Radix UI por debajo) en
+  `frontend/src/components/ui/` — `button`, `input`, `select`,
+  `checkbox`, `table`, `dialog`, `alert-dialog`, `card`, `badge`,
+  `alert`, `collapsible`, `label`. Alias `@/` → `frontend/src/`
+  (`vite.config.js` + `jsconfig.json`), `components.json` con la config
+  del CLI (`npx shadcn@latest add <componente>` para agregar más). La
+  paleta de color reutiliza la identidad previa de la app (azul como
+  `--primary`) en vez del tema neutro por defecto.
+- Notificaciones: `sonner` (`<Toaster/>` montado una vez en
+  `main.jsx`) — se importa `{ toast } from 'sonner'` directo donde haga
+  falta, sin contexto propio.
+- `frontend/src/context/`: `AuthContext` (sesión, `hasPermission()`),
+  `ConfirmContext` (`useConfirm()` — diálogo de confirmación con
+  `Promise<boolean>`, sobre `AlertDialog` de shadcn).
+- `frontend/src/components/`: `DataTable` (sobre `Table` de shadcn),
+  `Form` (constructor declarativo por config de campos — **estado
+  controlado**, a diferencia de la primera versión, porque `Select` y
+  `Checkbox` de Radix no son elementos nativos), `Modal` (sobre
+  `Dialog`), `Layout` (sidebar con secciones colapsables sobre
+  `Collapsible`), `Pagination`.
+- `frontend/src/lib/utils.js` (`cn()`, merge de clases) y
+  `frontend/src/lib/badgeHtml.js` (badges como HTML para las celdas de
+  `DataTable`, que se inyectan vía `render()` y no pueden montar un
+  componente React directamente).
+- `frontend/src/services/` y `frontend/src/api/httpClient.js` no
+  dependen de React — son los mismos wrappers de `fetch` (sesión por
+  cookie HttpOnly + CSRF por header) consumidos por los componentes.
+
+Páginas (`frontend/src/pages/*.jsx`): login, dashboard, usuarios
+(listado + alta + edición + desactivación), roles (listado + alta +
+edición + asignación de permisos), auditoría (listado filtrable), mapa
+de topología (dashboard visual de solo conexiones) y administración de
+topología (ABM de las cajas de cada categoría), proveedores (ABM +
+dashboard de solo lectura), licencias (ABM), y Microsoft 365
+(configuración de conexión, licencias compradas, usuarios sincronizados
+y MFA).
+
+**Build:** `nginx` construye su imagen desde `frontend/Dockerfile`
+(multi-stage: `npm ci && npm run build` con Node, resultado servido
+por nginx) — tanto en `docker-compose.yml` como en
+`docker-compose.prod.yml`. Como ya no hay bind mount del frontend,
+hace falta `--build` para ver cambios de frontend en Docker; para
+iterar con hot-reload real usar `npm run dev` (ver sección 5).
 
 docker compose -f docker-compose.prod.yml down
 docker compose -f docker-compose.prod.yml up -d --build

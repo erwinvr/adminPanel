@@ -25,4 +25,13 @@ export const PERMISSIONS = Object.freeze({
 
   TOPOLOGY_VIEW: 'topology.view',
   TOPOLOGY_EDIT: 'topology.edit',
+
+  PROVIDERS_VIEW: 'providers.view',
+  PROVIDERS_EDIT: 'providers.edit',
+
+  LICENSES_VIEW: 'licenses.view',
+  LICENSES_EDIT: 'licenses.edit',
+
+  M365_VIEW: 'm365.view',
+  M365_EDIT: 'm365.edit',
 });
