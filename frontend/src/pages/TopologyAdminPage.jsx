@@ -28,6 +28,7 @@ import { COLUMNS, CRIT_LEVELS } from '../constants/topology.js';
 import { Button } from '@/components/ui/button.jsx';
 import { Input } from '@/components/ui/input.jsx';
 import { Label } from '@/components/ui/label.jsx';
+import { escapeHtml } from '@/lib/escapeHtml.js';
 import { Alert, AlertDescription } from '@/components/ui/alert.jsx';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select.jsx';
 
@@ -93,7 +94,7 @@ export function TopologyAdminPage() {
 
   return (
     <Layout>
-      <h1 className="text-2xl font-semibold">Administración de Topología</h1>
+      <h1 className="text-2xl font-semibold">Aplicaciones</h1>
       <p className="topology-page__hint">
         Alta, baja y modificación de las cajas de cada categoría (Criticidad, Aplicación, Base de Datos, Servidor/Instancia,
         Datacenter/Nube). Las conexiones entre cajas se gestionan desde el mapa de topología.
@@ -153,10 +154,6 @@ export function TopologyAdminPage() {
       )}
     </Layout>
   );
-}
-
-function escapeHtml(s) {
-  return (s || '').replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
 }
 
 function NodeFormModal({ existing, nodes, onClose, onSaved }) {

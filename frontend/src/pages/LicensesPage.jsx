@@ -21,11 +21,7 @@ import { providerService } from '../services/provider.service.js';
 import { PERMISSIONS } from '../permissions/catalog.js';
 import { Button } from '@/components/ui/button.jsx';
 import { Alert, AlertDescription } from '@/components/ui/alert.jsx';
-
-function formatDate(isoDate) {
-  if (!isoDate) return '—';
-  return new Date(isoDate).toLocaleDateString('es-BO');
-}
+import { formatDate } from '@/lib/formatDate.js';
 
 export function LicensesPage() {
   const { hasPermission } = useAuth();

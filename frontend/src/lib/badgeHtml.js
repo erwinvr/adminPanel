@@ -3,6 +3,7 @@ const VARIANT_CLASSES = {
   secondary: 'bg-secondary text-secondary-foreground',
   destructive: 'bg-destructive text-white',
   success: 'bg-success text-success-foreground',
+  warning: 'bg-warning text-warning-foreground',
   muted: 'bg-muted text-muted-foreground',
 };
 

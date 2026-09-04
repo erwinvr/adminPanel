@@ -32,6 +32,26 @@ export const PERMISSIONS = Object.freeze({
   LICENSES_VIEW: 'licenses.view',
   LICENSES_EDIT: 'licenses.edit',
 
+  INVENTORY_VIEW: 'inventory.view',
+  INVENTORY_EDIT: 'inventory.edit',
+
+  OFFICES_VIEW: 'offices.view',
+  OFFICES_EDIT: 'offices.edit',
+
+  VAULT_VIEW: 'vault.view',
+  VAULT_EDIT: 'vault.edit',
+
+  AD_VIEW: 'ad.view',
+  AD_EDIT: 'ad.edit',
+
+  INSIGHTS_VIEW: 'insights.view',
+
+  BACKUPS_VIEW: 'backups.view',
+  BACKUPS_EDIT: 'backups.edit',
+
+  VULN_VIEW: 'vuln.view',
+  VULN_EDIT: 'vuln.edit',
+
   M365_VIEW: 'm365.view',
   M365_EDIT: 'm365.edit',
 });

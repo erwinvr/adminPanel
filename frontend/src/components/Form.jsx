@@ -12,8 +12,15 @@
  * necesario porque el Select y el Checkbox de shadcn/ui (Radix) no son
  * <select>/<input> nativos, no se pueden leer con `.value` por ref.
  *
+ * `field.enabledWhen(values)` deshabilita el campo dinámicamente según
+ * el valor actual de otros campos del mismo formulario (ej. la fecha de
+ * vencimiento de soporte solo se habilita si el checkbox "cuenta con
+ * soporte" está tildado) — se recalcula en cada render con el estado
+ * controlado del Form, así no hace falta que la página dueña del
+ * formulario levante su propio estado para lograrlo.
+ *
  * @param {{
- *   fields: { name: string, label: string, type?: string, required?: boolean, value?: any, options?: {value:string,label:string}[] }[],
+ *   fields: { name: string, label: string, type?: string, required?: boolean, value?: any, options?: {value:string,label:string}[], enabledWhen?: (values: Record<string, any>) => boolean }[],
  *   submitLabel: string,
  *   onSubmit: (values: Record<string, any>) => Promise<void> | void
  * }} props
@@ -32,7 +39,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 const EMPTY_SELECT_VALUE = '__empty__';
 
 function initialValues(fields) {
-  return Object.fromEntries(fields.map((f) => [f.name, f.type === 'checkbox-group' ? (f.value ?? []) : (f.value ?? '')]));
+  return Object.fromEntries(
+    fields.map((f) => {
+      if (f.type === 'checkbox-group') return [f.name, f.value ?? []];
+      if (f.type === 'checkbox') return [f.name, f.value ?? false];
+      return [f.name, f.value ?? ''];
+    })
+  );
 }
 
 export function Form({ fields, submitLabel, onSubmit }) {
@@ -59,12 +72,21 @@ export function Form({ fields, submitLabel, onSubmit }) {
 
   return (
     <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
-      {fields.map((field) => (
-        <div className="flex flex-col gap-1.5" key={field.name}>
-          {field.type !== 'checkbox-group' && <Label htmlFor={`field-${field.name}`}>{field.label}</Label>}
-          <FieldInput field={field} value={values[field.name]} onChange={(v) => setValue(field.name, v)} />
-        </div>
-      ))}
+      {fields.map((field) => {
+        const disabled = field.enabledWhen ? !field.enabledWhen(values) : field.disabled;
+        return (
+          <div className="flex flex-col gap-1.5" key={field.name}>
+            {field.type !== 'checkbox-group' && field.type !== 'checkbox' && (
+              <Label htmlFor={`field-${field.name}`}>{field.label}</Label>
+            )}
+            <FieldInput
+              field={disabled === field.disabled ? field : { ...field, disabled }}
+              value={values[field.name]}
+              onChange={(v) => setValue(field.name, v)}
+            />
+          </div>
+        );
+      })}
       {error && <p className="text-sm text-destructive">{error}</p>}
       <Button type="submit" disabled={submitting}>
         {submitLabel}
@@ -79,7 +101,11 @@ function FieldInput({ field, value, onChange }) {
   if (field.type === 'select') {
     const toRadix = (v) => (v === '' || v === undefined || v === null ? EMPTY_SELECT_VALUE : String(v));
     return (
-      <Select value={toRadix(value)} onValueChange={(v) => onChange(v === EMPTY_SELECT_VALUE ? '' : v)}>
+      <Select
+        value={toRadix(value)}
+        onValueChange={(v) => onChange(v === EMPTY_SELECT_VALUE ? '' : v)}
+        disabled={field.disabled}
+      >
         <SelectTrigger id={id} className="w-full">
           <SelectValue />
         </SelectTrigger>
@@ -91,6 +117,15 @@ function FieldInput({ field, value, onChange }) {
           ))}
         </SelectContent>
       </Select>
+    );
+  }
+
+  if (field.type === 'checkbox') {
+    return (
+      <label className="flex items-center gap-2 text-sm font-normal" htmlFor={id}>
+        <Checkbox id={id} checked={Boolean(value)} onCheckedChange={(checked) => onChange(Boolean(checked))} />
+        {field.label}
+      </label>
     );
   }
 

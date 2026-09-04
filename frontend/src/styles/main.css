@@ -2,24 +2,56 @@
  * main.css
  *
  * Tailwind v4 (CSS-first, sin tailwind.config.js) + tokens de tema de
- * shadcn/ui, reutilizando la paleta de color que ya tenía la app (azul
- * como --primary, mismos grises) en vez del tema neutro por defecto de
- * shadcn — así el "mejorar el estilo visual" upgradea la calidad de los
- * componentes (Radix + Tailwind) sin cambiar la identidad de color.
+ * shadcn/ui. Tema oscuro único (sin selector claro/oscuro — no hay
+ * feature de cambiar de tema, es la única identidad visual de la app),
+ * inspirado en un rediseño puntual del mapa de topología pero aplicado
+ * a nivel de tokens para que TODA la app lo herede automáticamente: los
+ * componentes de shadcn/ui y las páginas ya usan clases semánticas
+ * (bg-card, text-muted-foreground, bg-primary, etc.), nunca colores
+ * sueltos, así que cambiar los valores acá alcanza sin tocar cada
+ * componente.
  *
- * Los componentes genéricos (botones, tablas, formularios, modales,
- * toasts) ya NO tienen clases propias acá — son componentes de
- * src/components/ui/ (shadcn) estilados con clases de Tailwind
- * directamente en su JSX. Lo que queda en este archivo es: el reset de
- * doc/body, los tokens de tema, y estilos bien específicos de una sola
- * pantalla (el mapa de topología) que por su layout a medida no encajan
- * en ningún componente shadcn genérico.
+ * Tipografías vendorizadas localmente en public/fonts/ (Space Grotesk
+ * para títulos, Inter para el resto, IBM Plex Mono para las etiquetas
+ * tipo "código" del mapa de topología) — mismo motivo que con
+ * Cytoscape/D3 antes: Helmet aplica CSP por defecto (script-src/
+ * style-src 'self') y el despliegue es on-prem, sin depender de
+ * fonts.googleapis.com.
  */
 
 @import "tailwindcss";
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/inter-variable.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url('/fonts/space-grotesk-variable.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/ibm-plex-mono-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/ibm-plex-mono-500.woff2') format('woff2');
+}
 
 @theme inline {
   --color-background: var(--background);
@@ -40,6 +72,8 @@
   --color-destructive-foreground: var(--destructive-foreground);
   --color-success: var(--success);
   --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -49,34 +83,42 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-display: 'Space Grotesk', 'Inter', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
 }
 
 :root {
   --radius: 0.5rem;
 
-  --background: #f5f6f8;
-  --foreground: #1a1f29;
-  --card: #ffffff;
-  --card-foreground: #1a1f29;
-  --popover: #ffffff;
-  --popover-foreground: #1a1f29;
-  --primary: #2e74b5;
-  --primary-foreground: #ffffff;
-  --secondary: #eef2f6;
-  --secondary-foreground: #1a1f29;
-  --muted: #eef2f6;
-  --muted-foreground: #5b6472;
-  --accent: #eef2f6;
-  --accent-foreground: #1a1f29;
-  --destructive: #c0392b;
+  /* Fondo de página, un poco más oscuro que el "chrome" (sidebar/
+     topbar/tarjetas) para dar sensación de profundidad — igual que el
+     mockup: void (fondo) < ink (chrome) < ink-2 (tarjetas). */
+  --background: #0a0e1a;
+  --foreground: #e7eaf2;
+  --card: #171e33;
+  --card-foreground: #e7eaf2;
+  --popover: #171e33;
+  --popover-foreground: #e7eaf2;
+  --primary: #00d4b5;
+  --primary-foreground: #032420;
+  --secondary: #1b2136;
+  --secondary-foreground: #e7eaf2;
+  --muted: #1b2136;
+  --muted-foreground: #8992a9;
+  --accent: #1b2136;
+  --accent-foreground: #e7eaf2;
+  --destructive: #ff4757;
   --destructive-foreground: #ffffff;
-  --success: #1e8449;
-  --success-foreground: #ffffff;
-  --border: #d9dde3;
-  --input: #d9dde3;
-  --ring: #2e74b5;
-  --sidebar: #1f4e79;
-  --sidebar-foreground: #dce6f0;
+  --success: #00d4b5;
+  --success-foreground: #032420;
+  --warning: #ffd23f;
+  --warning-foreground: #3a2e00;
+  --border: #232b41;
+  --input: #232b41;
+  --ring: #00d4b5;
+  --sidebar: #131829;
+  --sidebar-foreground: #8992a9;
 
   /* Tokens "legacy" — usados todavía por el layout a medida del mapa de
      topología (más abajo), que no pasó a componentes shadcn genéricos. */
@@ -88,11 +130,17 @@
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--font-sans);
   background: var(--background);
   color: var(--foreground);
   font-size: 14px;
   line-height: 1.5;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
 }
 
 #root {
@@ -112,4 +160,15 @@ body {
 
 .topology-admin__swatch {
   display: inline-block; width: 18px; height: 18px; border-radius: 4px; border: 1px solid var(--color-border);
+}
+
+/* Líneas de conexión "vivas": se usa en las conexiones del mapa de
+   topología (TopologyPage.jsx) para que se lean como flujo de datos,
+   no como simples trazos estáticos. */
+@keyframes topology-flow {
+  to { stroke-dashoffset: -28; }
+}
+.topology-edge-flow {
+  stroke-dasharray: 6 8;
+  animation: topology-flow 1.1s linear infinite;
 }

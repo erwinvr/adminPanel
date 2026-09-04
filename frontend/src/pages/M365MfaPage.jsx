@@ -22,10 +22,7 @@ import { DataTable } from '../components/DataTable.jsx';
 import { m365Service } from '../services/m365.service.js';
 import { Alert, AlertDescription } from '@/components/ui/alert.jsx';
 import { badgeHtml } from '@/lib/badgeHtml.js';
-
-function escapeHtml(s) {
-  return (s || '').replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
-}
+import { escapeHtml } from '@/lib/escapeHtml.js';
 
 function triStateBadge(value) {
   if (value === true) return badgeHtml('Sí', 'success');

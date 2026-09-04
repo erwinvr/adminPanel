@@ -38,3 +38,17 @@ export const passwordResetRateLimiter = rateLimit({
   skip: () => env.isTest,
   handler: jsonRateLimitHandler,
 });
+
+// El token de un enlace de "Compartir" (32 bytes aleatorios) no es
+// adivinable por fuerza bruta, así que este limiter no es defensa
+// contra eso — es solo un freno básico ante scraping/DoS de un
+// endpoint público sin sesión. Ventana más laxa que login: se espera
+// que un dashboard compartido reciba varias vistas legítimas seguidas.
+export const publicDashboardRateLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  limit: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => env.isTest,
+  handler: jsonRateLimitHandler,
+});

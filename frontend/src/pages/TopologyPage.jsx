@@ -32,15 +32,17 @@ import {
   MarkerType,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { X, Info, ArrowLeftRight } from 'lucide-react';
+import { X, Info, ArrowLeftRight, Lock, Share2 } from 'lucide-react';
 import { Layout } from '../components/Layout.jsx';
 import { Modal } from '../components/Modal.jsx';
+import { ShareDialog } from '../components/ShareDialog.jsx';
 import { Form } from '../components/Form.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { toast } from 'sonner';
 import { useConfirm } from '../context/ConfirmContext.jsx';
 import { topologyService } from '../services/topology.service.js';
 import { providerService } from '../services/provider.service.js';
+import { vaultService } from '../services/vault.service.js';
 import { PERMISSIONS } from '../permissions/catalog.js';
 import { COLUMNS } from '../constants/topology.js';
 import { Button } from '@/components/ui/button.jsx';
@@ -55,16 +57,33 @@ function TopologyNode({ data }) {
   return (
     <div
       className={cn(
-        'group flex w-full flex-col gap-0.5 rounded-md border-2 bg-card px-3 py-2 shadow-sm transition-opacity duration-150',
-        data.dimmed && 'opacity-25'
+        'group flex w-full flex-col gap-0.5 rounded-md border bg-card px-3 py-2 shadow-sm transition-all duration-150',
+        data.dimmed && 'opacity-30'
       )}
-      style={{ borderColor: data.color, boxShadow: data.isSelected ? `0 0 0 2px ${data.color}` : undefined }}
+      style={{
+        borderColor: data.isSelected ? 'var(--primary)' : 'var(--border)',
+        borderLeftWidth: '3px',
+        borderLeftColor: data.color,
+        // El glow con el color de acento (no el de la categoría) marca
+        // "esta es la caja activa" de forma consistente sin importar
+        // qué categoría sea — el borde izquierdo sigue mostrando su
+        // color propio.
+        boxShadow: data.isSelected ? '0 0 0 1px var(--primary), 0 0 18px rgba(0, 212, 181, 0.35)' : undefined,
+      }}
     >
       <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
       <div className="flex items-start justify-between gap-1">
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-semibold">{data.label}</div>
-          {data.sub && <div className="truncate text-xs text-muted-foreground">{data.sub}</div>}
+          <div className="flex items-center gap-1 truncate text-sm font-semibold">
+            <span className="truncate">{data.label}</span>
+            {data.hasVaultCredential && (
+              <Lock
+                className="size-3 shrink-0 text-primary"
+                title="Vinculada a una credencial de la bóveda de contraseñas"
+              />
+            )}
+          </div>
+          {data.sub && <div className="truncate font-mono text-[11px] text-muted-foreground">{data.sub}</div>}
         </div>
         <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
           <button
@@ -101,10 +120,10 @@ function TopologyNode({ data }) {
 function TopologyHeaderNode({ data }) {
   return (
     <div
-      className="w-full pb-1.5 text-center text-[11px] font-bold tracking-wide text-muted-foreground uppercase"
-      style={{ borderBottom: `3px solid ${data.color}` }}
+      className="w-full pb-1.5 text-center font-mono text-[11px] font-medium tracking-wide text-muted-foreground uppercase"
+      style={{ borderBottom: `2px solid ${data.color}` }}
     >
-      {data.label} <span className="font-normal normal-case">({data.count})</span>
+      {data.label} <span className="normal-case text-muted-foreground/70">({data.count})</span>
     </div>
   );
 }
@@ -160,7 +179,7 @@ function TopologyCanvas({
       onEdgeClick={canEdit ? (_, edge) => onEdgeDelete(edge.id) : undefined}
       onPaneClick={onClearSelection}
     >
-      <Background />
+      <Background color="var(--border)" bgColor="var(--background)" gap={22} />
       <Controls showInteractive={false} />
       <MiniMap nodeColor={(n) => n.data?.color ?? '#999'} pannable zoomable className="!bg-muted" />
       {selectedNode && showInfo && (
@@ -215,40 +234,22 @@ function TopologyCanvas({
   );
 }
 
-export function TopologyPage() {
-  const { hasPermission } = useAuth();
-  const canEdit = hasPermission(PERMISSIONS.TOPOLOGY_EDIT);
+/**
+ * Todo lo interactivo del mapa (resaltar conexiones, ver info de
+ * proveedor, editar conexiones si `canEdit`) — separado de
+ * TopologyPage.jsx para que PublicDashboardPage.jsx lo reuse tal cual
+ * en el enlace público de "Compartir", con `canEdit={false}` y sin
+ * datos de proveedores/bóveda (ver services/share.service.js: el
+ * payload público del mapa NO incluye esa información, a propósito —
+ * es más sensible para un visitante anónimo que para alguien ya
+ * autenticado en el panel).
+ */
+export function TopologyMapView({ graph, providers, providersError, vaultNodeIds, canEdit, onRefresh }) {
   const confirm = useConfirm();
-  const navigate = useNavigate();
 
-  const [graph, setGraph] = useState({ nodes: [], edges: [] });
   const [selectedNodeId, setSelectedNodeId] = useState(null);
   const [showInfo, setShowInfo] = useState(false);
   const [connectionsTarget, setConnectionsTarget] = useState(null);
-  const [providers, setProviders] = useState([]);
-  const [providersError, setProvidersError] = useState(false);
-
-  const refresh = useCallback(async () => {
-    try {
-      setGraph(await topologyService.getGraph());
-    } catch (err) {
-      toast.error('No se pudo cargar el mapa: ' + err.message);
-    }
-    // El listado de proveedores es información complementaria (para el
-    // panel de detalle) — si el usuario no tiene providers.view, esto
-    // falla con 403 y simplemente no se muestra esa sección, sin romper
-    // el resto del mapa.
-    try {
-      setProviders(await providerService.list());
-      setProvidersError(false);
-    } catch {
-      setProvidersError(true);
-    }
-  }, []);
-
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
 
   const isRelated = useCallback(
     (id) => {
@@ -264,7 +265,7 @@ export function TopologyPage() {
     try {
       await topologyService.deleteEdge(edgeId);
       toast.success('Conexión eliminada');
-      await refresh();
+      await onRefresh();
     } catch (err) {
       toast.error(err.message);
     }
@@ -332,6 +333,7 @@ export function TopologyPage() {
           dimmed: Boolean(selectedNodeId) && !isRelated(n.id),
           isSelected: selectedNodeId === n.id,
           canEdit,
+          hasVaultCredential: vaultNodeIds.has(n.id),
           onManageConnections: () => handleOpenConnections(n),
           onShowInfo: () => handleShowInfo(n),
         },
@@ -342,7 +344,7 @@ export function TopologyPage() {
 
     return [...headers, ...boxes];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [graph.nodes, selectedNodeId, isRelated, canEdit]);
+  }, [graph.nodes, selectedNodeId, isRelated, canEdit, vaultNodeIds]);
 
   const flowEdges = useMemo(
     () =>
@@ -355,31 +357,34 @@ export function TopologyPage() {
           source: e.from,
           target: e.to,
           type: 'smoothstep',
+          // El "flujo" animado (línea punteada en movimiento) se ve
+          // en TODAS las conexiones por defecto — cuando hay una caja
+          // seleccionada, las NO relacionadas la pierden (se dejan
+          // estáticas, opacas al 10%) para que el ojo se vaya directo
+          // a la cadena activa.
+          className: !selectedNodeId || related ? 'topology-edge-flow' : undefined,
           style: {
-            stroke: color,
+            stroke: related ? 'var(--primary)' : color,
             strokeWidth: related ? 2.5 : 1.5,
-            opacity: selectedNodeId ? (related ? 1 : 0.1) : 0.6,
+            opacity: selectedNodeId ? (related ? 1 : 0.1) : 0.55,
           },
-          markerEnd: { type: MarkerType.ArrowClosed, color },
+          // Acá sí un hex literal (no var()) — el color del marcador de
+          // flecha lo arma React Flow como atributo SVG, no como
+          // propiedad de estilo, y ahí un custom property de CSS no
+          // se resuelve de forma confiable.
+          markerEnd: { type: MarkerType.ArrowClosed, color: related ? '#00d4b5' : color },
         };
       }),
     [graph.edges, graph.nodes, selectedNodeId]
   );
 
   return (
-    <Layout>
-      <h1 className="text-2xl font-semibold">Mapa de Topología</h1>
+    <>
       <p className="topology-page__hint">
         {canEdit
           ? 'Clic en una caja para resaltar sus conexiones. Usá el ícono ℹ️ para ver su proveedor y el ícono ⇄ para editar con qué otras se conecta. Clic en una línea para eliminarla.'
           : 'Clic en una caja para resaltar sus conexiones. Usá el ícono ℹ️ para ver su proveedor. Modo solo lectura — no tienes permiso de edición sobre este mapa.'}
       </p>
-
-      {canEdit && (
-        <Button type="button" variant="ghost" size="sm" className="mb-3" onClick={() => navigate('/topology/admin')}>
-          Administrar cajas (alta / baja / modificación) →
-        </Button>
-      )}
 
       <div className="h-[70vh] min-h-[480px] rounded-md border bg-card">
         <ReactFlowProvider>
@@ -415,9 +420,81 @@ export function TopologyPage() {
           onClose={() => setConnectionsTarget(null)}
           onSaved={async () => {
             setConnectionsTarget(null);
-            await refresh();
+            await onRefresh();
           }}
         />
+      )}
+    </>
+  );
+}
+
+export function TopologyPage() {
+  const { hasPermission } = useAuth();
+  const canEdit = hasPermission(PERMISSIONS.TOPOLOGY_EDIT);
+  const navigate = useNavigate();
+  const [shareOpen, setShareOpen] = useState(false);
+  const [graph, setGraph] = useState({ nodes: [], edges: [] });
+  const [providers, setProviders] = useState([]);
+  const [providersError, setProvidersError] = useState(false);
+  const [vaultNodeIds, setVaultNodeIds] = useState(() => new Set());
+
+  const refresh = useCallback(async () => {
+    try {
+      setGraph(await topologyService.getGraph());
+    } catch (err) {
+      toast.error('No se pudo cargar el mapa: ' + err.message);
+    }
+    // El listado de proveedores es información complementaria (para el
+    // panel de detalle) — si el usuario no tiene providers.view, esto
+    // falla con 403 y simplemente no se muestra esa sección, sin romper
+    // el resto del mapa.
+    try {
+      setProviders(await providerService.list());
+      setProvidersError(false);
+    } catch {
+      setProvidersError(true);
+    }
+    // Ídem con el símbolo de "vinculada a la bóveda" — si el usuario no
+    // tiene vault.view, esto falla con 403 y las cajas de aplicación
+    // simplemente no muestran el candado, sin romper el resto del mapa.
+    try {
+      setVaultNodeIds(new Set(await vaultService.linkedApplicationNodeIds()));
+    } catch {
+      setVaultNodeIds(new Set());
+    }
+  }, []);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  return (
+    <Layout>
+      <div className="flex items-start justify-between gap-4">
+        <h1 className="text-2xl font-semibold">Mapa de Aplicaciones</h1>
+        <Button type="button" variant="outline" size="sm" onClick={() => setShareOpen(true)}>
+          <Share2 className="size-4" />
+          Compartir
+        </Button>
+      </div>
+
+      {canEdit && (
+        <Button type="button" variant="ghost" size="sm" className="mb-3" onClick={() => navigate('/topology/admin')}>
+          Administrar cajas (alta / baja / modificación) →
+        </Button>
+      )}
+
+      <TopologyMapView
+        graph={graph}
+        providers={providers}
+        providersError={providersError}
+        vaultNodeIds={vaultNodeIds}
+        canEdit={canEdit}
+        onRefresh={refresh}
+      />
+
+      {shareOpen && (
+        <ShareDialog dashboardKey="topology" dashboardLabel="Mapa de Aplicaciones" onClose={() => setShareOpen(false)} />
       )}
     </Layout>
   );

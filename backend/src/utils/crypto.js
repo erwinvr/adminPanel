@@ -4,12 +4,15 @@
  * Cifrado simétrico (AES-256-GCM) para secretos que la aplicación
  * necesita poder DESCIFRAR más tarde (a diferencia de las contraseñas
  * de usuario, que se hashean con Argon2id y nunca se recuperan — ver
- * auth/password.js). Único uso actual: el client secret de la app de
- * Microsoft 365 (services/m365.service.js), que hace falta enviar tal
- * cual a Microsoft en cada sincronización.
+ * auth/password.js). Usos actuales: el client secret de la app de
+ * Microsoft 365 (services/m365.service.js) y las credenciales
+ * guardadas en la bóveda de contraseñas (services/vault.service.js).
  *
  * La clave sale de M365_ENCRYPTION_KEY (ver config/env.js) — nunca se
- * guarda en la base ni en el código.
+ * guarda en la base ni en el código. Se reutiliza la misma clave para
+ * ambos usos (mismo modelo de amenaza: protección en reposo dentro de
+ * esta misma base de datos) en vez de sumar una variable de entorno
+ * más para gestionar.
  */
 
 import crypto from 'node:crypto';

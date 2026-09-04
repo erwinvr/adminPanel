@@ -22,10 +22,21 @@ import { TopologyAdminPage } from './pages/TopologyAdminPage.jsx';
 import { ProvidersDashboardPage } from './pages/ProvidersDashboardPage.jsx';
 import { ProvidersPage } from './pages/ProvidersPage.jsx';
 import { LicensesPage } from './pages/LicensesPage.jsx';
+import { InventoryPage } from './pages/InventoryPage.jsx';
+import { OfficesPage } from './pages/OfficesPage.jsx';
+import { VaultPage } from './pages/VaultPage.jsx';
+import { ADSettingsPage } from './pages/ADSettingsPage.jsx';
+import { ADUsersPage } from './pages/ADUsersPage.jsx';
+import { UsersInsightsPage } from './pages/UsersInsightsPage.jsx';
 import { M365SettingsPage } from './pages/M365SettingsPage.jsx';
 import { M365LicensesPage } from './pages/M365LicensesPage.jsx';
 import { M365UsersPage } from './pages/M365UsersPage.jsx';
 import { M365MfaPage } from './pages/M365MfaPage.jsx';
+import { BackupSettingsPage } from './pages/BackupSettingsPage.jsx';
+import { BackupDashboardPage } from './pages/BackupDashboardPage.jsx';
+import { VulnSettingsPage } from './pages/VulnSettingsPage.jsx';
+import { VulnDashboardPage } from './pages/VulnDashboardPage.jsx';
+import { PublicDashboardPage } from './pages/PublicDashboardPage.jsx';
 
 // React Flow (usado solo acá) pesa bastante — se carga aparte para no
 // sumarse al bundle inicial de las demás páginas.
@@ -48,6 +59,8 @@ export function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      {/* Enlace de "Compartir" — a propósito FUERA de ProtectedRoute, sin sesión ni permisos. */}
+      <Route path="/public/:token" element={<PublicDashboardPage />} />
       <Route
         path="/dashboard"
         element={
@@ -61,6 +74,14 @@ export function App() {
         element={
           <ProtectedRoute permission={PERMISSIONS.USERS_VIEW}>
             <UsersPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/dashboard/users"
+        element={
+          <ProtectedRoute permission={PERMISSIONS.INSIGHTS_VIEW}>
+            <UsersInsightsPage />
           </ProtectedRoute>
         }
       />
@@ -119,6 +140,78 @@ export function App() {
         element={
           <ProtectedRoute permission={PERMISSIONS.LICENSES_VIEW}>
             <LicensesPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/inventory"
+        element={
+          <ProtectedRoute permission={PERMISSIONS.INVENTORY_VIEW}>
+            <InventoryPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/offices"
+        element={
+          <ProtectedRoute permission={PERMISSIONS.OFFICES_VIEW}>
+            <OfficesPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/vault"
+        element={
+          <ProtectedRoute permission={PERMISSIONS.VAULT_VIEW}>
+            <VaultPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/ad/settings"
+        element={
+          <ProtectedRoute permission={PERMISSIONS.AD_EDIT}>
+            <ADSettingsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/ad/users"
+        element={
+          <ProtectedRoute permission={PERMISSIONS.AD_VIEW}>
+            <ADUsersPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/backups/settings"
+        element={
+          <ProtectedRoute permission={PERMISSIONS.BACKUPS_EDIT}>
+            <BackupSettingsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/backups/dashboard"
+        element={
+          <ProtectedRoute permission={PERMISSIONS.BACKUPS_VIEW}>
+            <BackupDashboardPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/vuln/settings"
+        element={
+          <ProtectedRoute permission={PERMISSIONS.VULN_EDIT}>
+            <VulnSettingsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/vuln/dashboard"
+        element={
+          <ProtectedRoute permission={PERMISSIONS.VULN_VIEW}>
+            <VulnDashboardPage />
           </ProtectedRoute>
         }
       />

@@ -23,12 +23,9 @@ import { PERMISSIONS } from '../permissions/catalog.js';
 import { COLUMNS } from '../constants/topology.js';
 import { Button } from '@/components/ui/button.jsx';
 import { Alert, AlertDescription } from '@/components/ui/alert.jsx';
+import { escapeHtml } from '@/lib/escapeHtml.js';
 
 const CRITICALITY_COLUMN_INDEX = 0;
-
-function escapeHtml(s) {
-  return (s || '').replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
-}
 
 export function ProvidersPage() {
   const { hasPermission } = useAuth();
