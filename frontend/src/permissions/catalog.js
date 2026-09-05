@@ -52,6 +52,11 @@ export const PERMISSIONS = Object.freeze({
   VULN_VIEW: 'vuln.view',
   VULN_EDIT: 'vuln.edit',
 
+  NETBACKUP_VIEW: 'netbackup.view',
+  NETBACKUP_EDIT: 'netbackup.edit',
+
+  SMTP_EDIT: 'smtp.edit',
+
   M365_VIEW: 'm365.view',
   M365_EDIT: 'm365.edit',
 });

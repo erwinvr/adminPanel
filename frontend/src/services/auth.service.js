@@ -6,4 +6,5 @@ export const authService = {
   me: () => httpClient.get('/auth/me'),
   changePassword: (currentPassword, newPassword) =>
     httpClient.post('/auth/change-password', { currentPassword, newPassword }),
+  forgotPassword: (username) => httpClient.post('/auth/forgot-password', { username }),
 };

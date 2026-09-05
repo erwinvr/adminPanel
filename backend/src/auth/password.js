@@ -8,6 +8,7 @@
  */
 
 import argon2 from 'argon2';
+import { randomInt } from 'node:crypto';
 
 // Parámetros recomendados por OWASP para Argon2id (perfil balanceado
 // para un servidor de aplicación, no para hardware dedicado a hashing).
@@ -63,4 +64,36 @@ export function checkPasswordPolicy(plainPassword) {
     reasons.push('Debe incluir al menos un número');
   }
   return { valid: reasons.length === 0, reasons };
+}
+
+const TEMP_PASSWORD_LOWER = 'abcdefghijkmnpqrstuvwxyz'; // sin l/o, se confunden con 1/0
+const TEMP_PASSWORD_UPPER = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+const TEMP_PASSWORD_DIGITS = '23456789';
+const TEMP_PASSWORD_LENGTH = 14;
+
+/**
+ * Contraseña temporal para el flujo de "olvidé mi contraseña" (ver
+ * auth.service.js#forgotPassword) — cumple la política mínima por
+ * construcción (al menos una minúscula, una mayúscula y un número) y
+ * evita caracteres ambiguos para que copiarla a mano desde el correo
+ * no sea una trampa.
+ * @returns {string}
+ */
+export function generateTemporaryPassword() {
+  const pool = TEMP_PASSWORD_LOWER + TEMP_PASSWORD_UPPER + TEMP_PASSWORD_DIGITS;
+  const required = [
+    TEMP_PASSWORD_LOWER[randomInt(TEMP_PASSWORD_LOWER.length)],
+    TEMP_PASSWORD_UPPER[randomInt(TEMP_PASSWORD_UPPER.length)],
+    TEMP_PASSWORD_DIGITS[randomInt(TEMP_PASSWORD_DIGITS.length)],
+  ];
+  const rest = Array.from({ length: TEMP_PASSWORD_LENGTH - required.length }, () => pool[randomInt(pool.length)]);
+  const chars = [...required, ...rest];
+  // Barajado Fisher-Yates con randomInt (criptográficamente seguro) en
+  // vez de Math.random() — para que la posición de los caracteres
+  // "obligatorios" tampoco sea predecible.
+  for (let i = chars.length - 1; i > 0; i--) {
+    const j = randomInt(i + 1);
+    [chars[i], chars[j]] = [chars[j], chars[i]];
+  }
+  return chars.join('');
 }

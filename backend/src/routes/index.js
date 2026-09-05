@@ -25,6 +25,8 @@ import shareRoutes from './share.routes.js';
 import publicRoutes from './public.routes.js';
 import backupRoutes from './backup.routes.js';
 import vulnRoutes from './vuln.routes.js';
+import netbackupRoutes from './netbackup.routes.js';
+import smtpRoutes from './smtp.routes.js';
 import m365Routes from './m365.routes.js';
 
 const router = Router();
@@ -47,6 +49,8 @@ router.use('/shares', shareRoutes);
 router.use('/public', publicRoutes);
 router.use('/backups', backupRoutes);
 router.use('/vuln', vulnRoutes);
+router.use('/netbackup', netbackupRoutes);
+router.use('/smtp', smtpRoutes);
 router.use('/m365', m365Routes);
 
 export default router;

@@ -14,6 +14,10 @@ export const requestPasswordResetSchema = Joi.object({
   email: Joi.string().trim().email().required(),
 });
 
+export const forgotPasswordSchema = Joi.object({
+  username: Joi.string().trim().min(1).max(255).required(),
+});
+
 export const confirmPasswordResetSchema = Joi.object({
   token: Joi.string().min(10).required(),
   newPassword: Joi.string().min(12).max(200).required(),

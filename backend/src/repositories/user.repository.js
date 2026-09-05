@@ -41,9 +41,15 @@ export const userRepository = {
   },
 
   existsByUsernameOrEmail(username, email, excludeId = null) {
-    const query = db(TABLE)
-      .where('username', username)
-      .orWhere('email', email.toLowerCase());
+    // Agrupado explícitamente: sin este callback, Knex genera
+    // "WHERE username = ? OR email = ? AND id != ?", y por precedencia de
+    // operadores SQL (AND antes que OR) el excludeId solo protege la mitad
+    // del email — la comparación de username siempre matchea al propio
+    // usuario que se está editando, y el conflicto da falso positivo en
+    // cualquier update.
+    const query = db(TABLE).where((qb) => {
+      qb.where('username', username).orWhere('email', email.toLowerCase());
+    });
     if (excludeId) query.andWhereNot('id', excludeId);
     return query.first().then(Boolean);
   },

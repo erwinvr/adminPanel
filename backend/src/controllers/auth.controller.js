@@ -39,3 +39,12 @@ export async function confirmPasswordReset(req, res) {
   await authService.confirmPasswordReset(req, req.body);
   res.status(204).send();
 }
+
+export async function forgotPassword(req, res) {
+  await authService.forgotPassword(req, req.body.username);
+  // Respuesta genérica siempre, exista o no el usuario — evita user enumeration.
+  res.status(200).json({
+    success: true,
+    data: { message: 'Si el usuario existe, se envió un correo con una contraseña temporal' },
+  });
+}

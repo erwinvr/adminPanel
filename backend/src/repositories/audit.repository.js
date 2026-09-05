@@ -27,8 +27,11 @@ export const auditRepository = {
       );
 
     if (userId) query.andWhere('a.user_id', userId);
-    if (action) query.andWhere('a.action', action);
-    if (resource) query.andWhere('a.resource', resource);
+    // ILIKE (contiene, sin distinguir mayúsculas) en vez de igualdad exacta
+    // — el filtro es un buscador de texto libre (ej. "auth" debe encontrar
+    // "auth.login", "auth.logout", etc.), no un selector de código exacto.
+    if (action) query.andWhereILike('a.action', `%${action}%`);
+    if (resource) query.andWhereILike('a.resource', `%${resource}%`);
     if (from) query.andWhere('a.occurred_at', '>=', from);
     if (to) query.andWhere('a.occurred_at', '<=', to);
 

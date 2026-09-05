@@ -1,44 +1,50 @@
 /**
  * jobs/syncScheduler.js
  *
- * Job en segundo plano que dispara la sincronización automática de
- * Active Directory y Microsoft 365 según la frecuencia configurada en
- * cada página de Configuración (`sync_interval_minutes` en
- * ad_settings/m365_settings — 0/null desactiva el job para esa
- * integración, queda solo el botón "Sincronizar ahora").
+ * Job en segundo plano que dispara:
+ *  - la sincronización automática de Active Directory y Microsoft 365
+ *    según `sync_interval_minutes` en ad_settings/m365_settings (una
+ *    sola fila de configuración por integración), y
+ *  - el backup automático de CADA dispositivo de "Backup Networking"
+ *    según su propio `sync_interval_minutes` en netbackup_devices
+ *    (acá son varios dispositivos, cada uno con su frecuencia).
+ * En los tres casos, 0/null desactiva el job automático — queda solo
+ * el botón manual ("Sincronizar ahora" / "Descargar ahora").
  *
  * No usa una librería de cron: la frecuencia configurable es "cada N
  * minutos" simple, no expresiones cron completas — alcanza con un
- * timer que revisa periódicamente si a cada integración ya le toca,
- * sin sumar una dependencia nueva al proyecto.
+ * timer que revisa periódicamente si a cada uno ya le toca, sin sumar
+ * una dependencia nueva al proyecto.
  *
  * Cada corrida automática pasa `req = null` a `adService.sync()` /
- * `m365Service.sync()` — sin usuario, se audita con userId null
- * (mismo criterio que un evento de sistema, ver audit.service.js) y
- * queda marcada con `trigger: 'scheduled'` en los metadatos para
- * distinguirla de una sincronización manual en el registro de
- * auditoría.
+ * `m365Service.sync()` / `netbackupService.runBackup()` — sin usuario,
+ * se audita con userId null (mismo criterio que un evento de sistema,
+ * ver audit.service.js) y queda marcada con `trigger: 'scheduled'` en
+ * los metadatos para distinguirla de una corrida manual en el
+ * registro de auditoría.
  */
 
 import { adRepository } from '../repositories/ad.repository.js';
 import { m365Repository } from '../repositories/m365.repository.js';
+import { netbackupRepository } from '../repositories/netbackup.repository.js';
 import { adService } from '../services/ad.service.js';
 import { m365Service } from '../services/m365.service.js';
+import { netbackupService } from '../services/netbackup.service.js';
 import { logger } from '../config/logger.js';
 
-const TICK_MS = 60 * 1000; // revisa cada minuto si alguna integración ya venció su intervalo
+const TICK_MS = 60 * 1000; // revisa cada minuto si algo ya venció su intervalo
 
-// Evita disparar una segunda corrida de la misma integración mientras
-// la anterior sigue en curso (un sync real puede tardar más que TICK_MS).
+// Evita disparar una segunda corrida de la misma integración/dispositivo
+// mientras la anterior sigue en curso (una corrida real puede tardar
+// más que TICK_MS).
 const running = new Set();
 
-function isDue(settingsRow) {
-  const intervalMinutes = settingsRow?.sync_interval_minutes;
-  if (!intervalMinutes) return false; // 0/null = job desactivado para esta integración
+function isDue(intervalMinutes, lastRunAt) {
+  if (!intervalMinutes) return false; // 0/null = job desactivado
 
-  if (!settingsRow.last_synced_at) return true; // nunca sincronizó — corre en el próximo tick
+  if (!lastRunAt) return true; // nunca corrió — corre en el próximo tick
 
-  const dueAt = new Date(settingsRow.last_synced_at).getTime() + intervalMinutes * 60 * 1000;
+  const dueAt = new Date(lastRunAt).getTime() + intervalMinutes * 60 * 1000;
   return Date.now() >= dueAt;
 }
 
@@ -46,7 +52,7 @@ async function checkAndRun(key, getSettings, runSync) {
   if (running.has(key)) return;
 
   const settingsRow = await getSettings();
-  if (!isDue(settingsRow)) return;
+  if (!isDue(settingsRow?.sync_interval_minutes, settingsRow?.last_synced_at)) return;
 
   running.add(key);
   try {
@@ -62,9 +68,31 @@ async function checkAndRun(key, getSettings, runSync) {
   }
 }
 
+async function checkAndRunNetbackupDevices() {
+  const devices = await netbackupRepository.listSchedulableDevices();
+  for (const device of devices) {
+    const key = `netbackup:${device.id}`;
+    if (running.has(key)) continue;
+    if (!isDue(device.sync_interval_minutes, device.last_run_at)) continue;
+
+    running.add(key);
+    (async () => {
+      try {
+        logger.info(`[sync-scheduler] Disparando backup automático del dispositivo ${device.id}`);
+        await netbackupService.runBackup(null, device.id);
+      } catch (err) {
+        logger.error({ err }, `[sync-scheduler] Falló el backup automático del dispositivo ${device.id}`);
+      } finally {
+        running.delete(key);
+      }
+    })();
+  }
+}
+
 async function tick() {
   await checkAndRun('ad', () => adRepository.getSettings(), () => adService.sync(null));
   await checkAndRun('m365', () => m365Repository.getSettings(), () => m365Service.sync(null));
+  await checkAndRunNetbackupDevices();
 }
 
 let intervalHandle = null;

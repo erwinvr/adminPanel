@@ -10,12 +10,14 @@ import { randomBytes, createHash } from 'node:crypto';
 import { db } from '../config/database.js';
 import { userRepository } from '../repositories/user.repository.js';
 import { roleRepository } from '../repositories/role.repository.js';
-import { hashPassword, verifyPassword, checkPasswordPolicy } from '../auth/password.js';
+import { hashPassword, verifyPassword, checkPasswordPolicy, generateTemporaryPassword } from '../auth/password.js';
 import { regenerateSession, destroySession } from '../auth/session.js';
 import { recordEvent } from '../audit/audit.service.js';
 import { resolveEffectivePermissions } from '../permissions/permissionResolver.js';
+import { sendTemporaryPasswordEmail } from '../utils/mailer.js';
 import { env } from '../config/env.js';
 import { AuthenticationError, ValidationError } from '../errors/AppError.js';
+import { logger } from '../config/logger.js';
 
 // Mensaje genérico e idéntico para credenciales inválidas, sin importar
 // si el usuario existe, está inactivo, o la contraseña es incorrecta —
@@ -196,5 +198,47 @@ export const authService = {
       await trx.raw("DELETE FROM sessions WHERE sess->>'userId' = ?", [record.user_id]);
       await recordEvent({ userId: record.user_id, action: 'auth.password_reset_confirmed', resource: 'user', resourceId: record.user_id, result: 'success', req, trx });
     });
+  },
+
+  /**
+   * "Olvidé mi contraseña" — a diferencia de requestPasswordReset (que
+   * manda un ENLACE por email y requiere un paso de confirmación
+   * aparte), acá se genera directamente una contraseña temporal, se
+   * guarda ya hasheada con `must_change_password = true`, y se manda
+   * por correo — el usuario entra directo con ella y el próximo login
+   * lo obliga a cambiarla (ver App.jsx en el frontend). SIEMPRE
+   * responde éxito genérico desde el controller, exista o no el
+   * usuario/tenga o no email — mismo criterio anti-enumeration que el
+   * resto de los flujos de recuperación.
+   * @param {import('express').Request} req
+   * @param {string} username
+   */
+  async forgotPassword(req, username) {
+    const user = await userRepository.findByUsernameOrEmailWithSecrets(username.toLowerCase());
+    if (!user) {
+      await recordEvent({ action: 'auth.forgot_password', resource: 'user', result: 'failure', req, metadata: { reason: 'user_not_found', username } });
+      return;
+    }
+
+    const temporaryPassword = generateTemporaryPassword();
+    const newHash = await hashPassword(temporaryPassword);
+
+    await db.transaction(async (trx) => {
+      await userRepository.update(user.id, { password_hash: newHash, must_change_password: true }, trx);
+      // Igual que confirmPasswordReset: una contraseña nueva por este
+      // camino invalida cualquier sesión existente, no solo la actual.
+      await trx.raw("DELETE FROM sessions WHERE sess->>'userId' = ?", [user.id]);
+      await recordEvent({ userId: user.id, action: 'auth.forgot_password', resource: 'user', resourceId: user.id, result: 'success', req, trx });
+    });
+
+    try {
+      await sendTemporaryPasswordEmail({ to: user.email, username: user.username, temporaryPassword });
+    } catch (err) {
+      // El envío puede fallar (SMTP mal configurado, etc.) sin que el
+      // controller deje de responder genérico — pero SÍ hay que dejarlo
+      // en el log para que un admin lo note, porque el usuario nunca va
+      // a saber que su contraseña cambió si el correo no llegó.
+      logger.error({ err, userId: user.id }, 'forgotPassword: la contraseña se cambió pero el correo no se pudo enviar');
+    }
   },
 };

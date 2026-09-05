@@ -8,6 +8,7 @@ import {
   changePasswordSchema,
   requestPasswordResetSchema,
   confirmPasswordResetSchema,
+  forgotPasswordSchema,
 } from '../validators/auth.validator.js';
 import * as authController from '../controllers/auth.controller.js';
 
@@ -33,6 +34,12 @@ router.post(
   passwordResetRateLimiter,
   validateBody(confirmPasswordResetSchema),
   asyncHandler(authController.confirmPasswordReset)
+);
+router.post(
+  '/forgot-password',
+  passwordResetRateLimiter,
+  validateBody(forgotPasswordSchema),
+  asyncHandler(authController.forgotPassword)
 );
 
 export default router;

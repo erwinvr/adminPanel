@@ -75,6 +75,7 @@ export function AuditPage() {
             ]}
             rows={logs}
             emptyMessage="No hay eventos de auditoría con estos filtros"
+            paginated={false}
           />
           {meta && (
             <Pagination

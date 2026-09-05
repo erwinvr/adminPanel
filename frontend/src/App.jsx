@@ -36,6 +36,11 @@ import { BackupSettingsPage } from './pages/BackupSettingsPage.jsx';
 import { BackupDashboardPage } from './pages/BackupDashboardPage.jsx';
 import { VulnSettingsPage } from './pages/VulnSettingsPage.jsx';
 import { VulnDashboardPage } from './pages/VulnDashboardPage.jsx';
+import { NetBackupDevicesPage } from './pages/NetBackupDevicesPage.jsx';
+import { NetBackupHistoryPage } from './pages/NetBackupHistoryPage.jsx';
+import { NetBackupBitacoraPage } from './pages/NetBackupBitacoraPage.jsx';
+import { SmtpSettingsPage } from './pages/SmtpSettingsPage.jsx';
+import { ForcedPasswordChangePage } from './pages/ForcedPasswordChangePage.jsx';
 import { PublicDashboardPage } from './pages/PublicDashboardPage.jsx';
 
 // React Flow (usado solo acá) pesa bastante — se carga aparte para no
@@ -43,8 +48,11 @@ import { PublicDashboardPage } from './pages/PublicDashboardPage.jsx';
 const TopologyPage = lazy(() => import('./pages/TopologyPage.jsx').then((m) => ({ default: m.TopologyPage })));
 
 function ProtectedRoute({ permission, children }) {
-  const { isAuthenticated, hasPermission } = useAuth();
+  const { isAuthenticated, hasPermission, user } = useAuth();
   if (!isAuthenticated) return <Navigate to="/login" replace />;
+  // Contraseña temporal ("olvidé mi contraseña") o cambio forzado por un
+  // admin: ninguna ruta protegida se renderiza hasta que la cambie.
+  if (user?.must_change_password) return <ForcedPasswordChangePage />;
   if (permission && !hasPermission(permission)) return <Navigate to="/dashboard" replace />;
   return children;
 }
@@ -212,6 +220,38 @@ export function App() {
         element={
           <ProtectedRoute permission={PERMISSIONS.VULN_VIEW}>
             <VulnDashboardPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/netbackup/devices"
+        element={
+          <ProtectedRoute permission={PERMISSIONS.NETBACKUP_EDIT}>
+            <NetBackupDevicesPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/netbackup/history"
+        element={
+          <ProtectedRoute permission={PERMISSIONS.NETBACKUP_VIEW}>
+            <NetBackupHistoryPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/netbackup/bitacora"
+        element={
+          <ProtectedRoute permission={PERMISSIONS.NETBACKUP_VIEW}>
+            <NetBackupBitacoraPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/config/smtp"
+        element={
+          <ProtectedRoute permission={PERMISSIONS.SMTP_EDIT}>
+            <SmtpSettingsPage />
           </ProtectedRoute>
         }
       />

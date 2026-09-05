@@ -34,6 +34,9 @@ import {
   ChartColumn,
   HardDrive,
   ShieldAlert,
+  Router,
+  History,
+  GitCompare,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { toast } from 'sonner';
@@ -99,6 +102,22 @@ const MANAGEMENT_SECTIONS = [
     label: 'Vulnerabilidades',
     icon: ShieldAlert,
     items: [{ path: '/vuln/settings', label: 'Configuración', permission: PERMISSIONS.VULN_EDIT, icon: Settings }],
+  },
+  {
+    key: 'netbackup',
+    label: 'Backup Networking',
+    icon: Router,
+    items: [
+      { path: '/netbackup/devices', label: 'Dispositivos', permission: PERMISSIONS.NETBACKUP_EDIT, icon: Router },
+      { path: '/netbackup/history', label: 'Historial', permission: PERMISSIONS.NETBACKUP_VIEW, icon: History },
+      { path: '/netbackup/bitacora', label: 'Bitácora', permission: PERMISSIONS.NETBACKUP_VIEW, icon: GitCompare },
+    ],
+  },
+  {
+    key: 'config',
+    label: 'Configuración',
+    icon: Settings,
+    items: [{ path: '/config/smtp', label: 'SMTP', permission: PERMISSIONS.SMTP_EDIT, icon: Settings }],
   },
   {
     key: 'security',
