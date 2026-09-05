@@ -1,16 +1,17 @@
 import { db } from '../config/database.js';
 
-// Nunca incluye ssh_password_encrypted — igual que vault_credentials,
-// el secreto solo sale cifrado y de acá no sale nunca en texto plano.
+// Nunca incluye password_encrypted — igual que vault_credentials, el
+// secreto solo sale cifrado y de acá no sale nunca en texto plano.
 const DEVICE_COLUMNS = [
   'd.id',
   'd.hardware_id as hardwareId',
   'h.brand as hardwareBrand',
   'h.model as hardwareModel',
   'h.management_ip as managementIp',
-  'd.ssh_port as sshPort',
-  'd.ssh_username as sshUsername',
-  'd.ssh_password_preview as sshPasswordPreview',
+  'd.driver',
+  'd.port',
+  'd.username',
+  'd.password_preview as passwordPreview',
   'd.command',
   'd.sync_interval_minutes as syncIntervalMinutes',
   'd.last_run_at as lastRunAt',
@@ -136,6 +137,20 @@ export const netbackupRepository = {
         db.raw('count(distinct r.config_hash) as "uniqueConfigs"')
       )
       .orderBy(['h.brand', 'h.model']);
+  },
+
+  // Última corrida exitosa de un dispositivo CON su config completa —
+  // a diferencia de listSuccessfulRunsForDevice (que no trae
+  // config_output, es para la lista de versiones de Bitácora), esta
+  // es la que usa compliance.service.js para evaluar una regla nueva
+  // contra el estado actual de cada dispositivo sin esperar al
+  // próximo backup.
+  findLatestSuccessfulRunForDevice(deviceId) {
+    return db('netbackup_runs')
+      .where({ device_id: deviceId, result: 'success' })
+      .select('id', 'config_output as configOutput')
+      .orderBy('started_at', 'desc')
+      .first();
   },
 
   // Corridas exitosas de un dispositivo, más viejas primero — así el

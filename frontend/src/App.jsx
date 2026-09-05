@@ -39,6 +39,7 @@ import { VulnDashboardPage } from './pages/VulnDashboardPage.jsx';
 import { NetBackupDevicesPage } from './pages/NetBackupDevicesPage.jsx';
 import { NetBackupHistoryPage } from './pages/NetBackupHistoryPage.jsx';
 import { NetBackupBitacoraPage } from './pages/NetBackupBitacoraPage.jsx';
+import { NetBackupCompliancePage } from './pages/NetBackupCompliancePage.jsx';
 import { SmtpSettingsPage } from './pages/SmtpSettingsPage.jsx';
 import { ForcedPasswordChangePage } from './pages/ForcedPasswordChangePage.jsx';
 import { PublicDashboardPage } from './pages/PublicDashboardPage.jsx';
@@ -244,6 +245,14 @@ export function App() {
         element={
           <ProtectedRoute permission={PERMISSIONS.NETBACKUP_VIEW}>
             <NetBackupBitacoraPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/netbackup/compliance"
+        element={
+          <ProtectedRoute permission={PERMISSIONS.NETBACKUP_VIEW}>
+            <NetBackupCompliancePage />
           </ProtectedRoute>
         }
       />

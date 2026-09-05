@@ -111,6 +111,7 @@ const MANAGEMENT_SECTIONS = [
       { path: '/netbackup/devices', label: 'Dispositivos', permission: PERMISSIONS.NETBACKUP_EDIT, icon: Router },
       { path: '/netbackup/history', label: 'Historial', permission: PERMISSIONS.NETBACKUP_VIEW, icon: History },
       { path: '/netbackup/bitacora', label: 'Bitácora', permission: PERMISSIONS.NETBACKUP_VIEW, icon: GitCompare },
+      { path: '/netbackup/compliance', label: 'Compliance', permission: PERMISSIONS.NETBACKUP_VIEW, icon: ShieldCheck },
     ],
   },
   {

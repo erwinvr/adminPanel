@@ -51,6 +51,17 @@ services:
     # Sin "ports": solo nginx llega al backend, vía la red interna
     # (hostname "backend", resuelto automáticamente por Docker Compose).
 
+  # Microservicio Python para los drivers de "Backup Networking" que no
+  # son SSH crudo (napalm_ios, fortios_api) — ver netbackup-agent/ y
+  # backend/src/integrations/networkBackup/microserviceClient.js.
+  netbackup-agent:
+    build:
+      context: ./netbackup-agent
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    # Sin "ports": solo el backend lo alcanza, vía la red interna
+    # (hostname "netbackup-agent") — mismo modelo de confianza que "db".
+
   nginx:
     build:
       context: .

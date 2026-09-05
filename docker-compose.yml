@@ -48,6 +48,21 @@ services:
       db:
         condition: service_healthy
 
+  # Microservicio Python para los drivers de "Backup Networking" que no
+  # son SSH crudo (napalm_ios, fortios_api) — ver netbackup-agent/ y
+  # backend/src/integrations/networkBackup/microserviceClient.js. Sin
+  # dependencia de BD/backend: el backend lo llama por request, no al
+  # arrancar.
+  netbackup-agent:
+    build:
+      context: ./netbackup-agent
+      dockerfile: Dockerfile.dev
+    restart: unless-stopped
+    volumes:
+      - ./netbackup-agent/app:/app/app
+    ports:
+      - '8001:8000' # solo en dev, para probar el microservicio directamente sin pasar por el backend
+
   nginx:
     build:
       context: .

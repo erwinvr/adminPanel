@@ -1,0 +1,18 @@
+# syntax=docker/dockerfile:1
+#
+# Imagen de desarrollo: `--reload` de uvicorn + bind mount de ./app en
+# docker-compose.yml, mismo espíritu que backend/Dockerfile.dev con
+# nodemon. No usar en producción — ver Dockerfile (sin reload, sin
+# root).
+
+FROM python:3.12-slim
+WORKDIR /app
+
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY app ./app
+
+EXPOSE 8000
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

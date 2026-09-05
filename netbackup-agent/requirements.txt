@@ -1,0 +1,8 @@
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+napalm==5.0.0
+requests==2.32.3
+# napalm importa pkg_resources directamente (paquete viejo, sin migrar a
+# importlib.metadata) — setuptools >=81 lo removió, hay que fijar una
+# versión que todavía lo incluya.
+setuptools==75.6.0

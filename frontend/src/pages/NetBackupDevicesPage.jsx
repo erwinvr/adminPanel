@@ -2,11 +2,12 @@
  * pages/NetBackupDevicesPage.jsx
  *
  * "Backup Networking" → Dispositivos: ABM de qué equipos de networking
- * del inventario de hardware tienen backup de configuración por SSH
- * configurado, con sus credenciales, el comando de extracción y la
- * frecuencia automática (mismo patrón que Active Directory/Microsoft
- * 365 — 0/null de frecuencia = solo manual). "Descargar ahora" dispara
- * la extracción en el momento (además del job en segundo plano) y, si
+ * del inventario de hardware tienen backup de configuración
+ * configurado, con sus credenciales, el `driver` (cómo se extrae la
+ * config — ver constants/netbackupDrivers.js) y la frecuencia
+ * automática (mismo patrón que Active Directory/Microsoft 365 —
+ * 0/null de frecuencia = solo manual). "Descargar ahora" dispara la
+ * extracción en el momento (además del job en segundo plano) y, si
  * sale bien, descarga la config recién obtenida como archivo de texto.
  */
 
@@ -20,6 +21,7 @@ import { toast } from 'sonner';
 import { useConfirm } from '../context/ConfirmContext.jsx';
 import { netbackupService } from '../services/netbackup.service.js';
 import { SYNC_FREQUENCY_OPTIONS } from '../constants/syncFrequency.js';
+import { NETBACKUP_DRIVER_OPTIONS, netbackupDriverLabel } from '../constants/netbackupDrivers.js';
 import { PERMISSIONS } from '../permissions/catalog.js';
 import { Button } from '@/components/ui/button.jsx';
 import { Alert, AlertDescription } from '@/components/ui/alert.jsx';
@@ -113,7 +115,7 @@ export function NetBackupDevicesPage() {
     <Layout>
       <h1 className="text-2xl font-semibold">Dispositivos</h1>
       <p className="topology-page__hint">
-        Equipos de networking del inventario con backup de configuración por SSH. La IP usada es la "IP de
+        Equipos de networking del inventario con backup de configuración configurado. La IP usada es la "IP de
         administración" cargada en Hardware.
       </p>
 
@@ -130,8 +132,9 @@ export function NetBackupDevicesPage() {
           columns={[
             { key: 'hardware', label: 'Equipo', render: (r) => escapeHtml(`${r.hardwareBrand} ${r.hardwareModel}`) },
             { key: 'managementIp', label: 'IP', render: (r) => escapeHtml(r.managementIp) },
-            { key: 'sshUsername', label: 'Usuario SSH', render: (r) => escapeHtml(r.sshUsername) },
-            { key: 'command', label: 'Comando', render: (r) => escapeHtml(r.command) },
+            { key: 'driver', label: 'Método', render: (r) => escapeHtml(netbackupDriverLabel(r.driver)) },
+            { key: 'username', label: 'Usuario', render: (r) => escapeHtml(r.username) },
+            { key: 'command', label: 'Comando', render: (r) => (r.driver === 'raw_ssh' ? escapeHtml(r.command) : '—') },
             { key: 'syncIntervalMinutes', label: 'Frecuencia', render: (r) => frequencyLabel(r.syncIntervalMinutes) },
             { key: 'lastRunAt', label: 'Última corrida', render: (r) => formatDateTime(r.lastRunAt) },
           ]}
@@ -210,21 +213,30 @@ function DeviceFormModal({ existing, onClose, onSaved }) {
                   required: true,
                 },
               ]),
-          { name: 'sshPort', label: 'Puerto SSH', type: 'number', value: existing?.sshPort ?? 22, required: true },
-          { name: 'sshUsername', label: 'Usuario SSH', value: existing?.sshUsername, required: true },
           {
-            name: 'sshPassword',
+            name: 'driver',
+            label: 'Método de extracción',
+            type: 'select',
+            value: existing?.driver ?? 'raw_ssh',
+            options: NETBACKUP_DRIVER_OPTIONS,
+            required: true,
+          },
+          { name: 'port', label: 'Puerto', type: 'number', value: existing?.port ?? 22, required: true },
+          { name: 'username', label: 'Usuario', value: existing?.username, required: true },
+          {
+            name: 'password',
             label: isEdit
-              ? `Contraseña (configurada, termina en "${existing.sshPasswordPreview}" — dejar en blanco para mantenerla)`
+              ? `Contraseña (configurada, termina en "${existing.passwordPreview}" — dejar en blanco para mantenerla)`
               : 'Contraseña',
             type: 'password',
             required: !isEdit,
           },
           {
             name: 'command',
-            label: 'Comando de extracción (ej. /export para Mikrotik, "show running-config" para Cisco)',
+            label: 'Comando de extracción (solo para "Genérico" — ej. /export para Mikrotik, "show running-config" para IOS)',
             value: existing?.command ?? '/export',
             required: true,
+            enabledWhen: (values) => values.driver === 'raw_ssh',
           },
           {
             name: 'syncIntervalMinutes',
@@ -238,18 +250,19 @@ function DeviceFormModal({ existing, onClose, onSaved }) {
         submitLabel={isEdit ? 'Guardar cambios' : 'Crear dispositivo'}
         onSubmit={async (values) => {
           const payload = {
-            sshPort: Number(values.sshPort),
-            sshUsername: values.sshUsername.trim(),
-            command: values.command.trim(),
+            driver: values.driver,
+            port: Number(values.port),
+            username: values.username.trim(),
+            command: values.driver === 'raw_ssh' ? values.command.trim() : null,
             syncIntervalMinutes: Number(values.syncIntervalMinutes),
           };
-          if (values.sshPassword) payload.sshPassword = values.sshPassword;
+          if (values.password) payload.password = values.password;
 
           if (isEdit) {
             await netbackupService.updateDevice(existing.id, payload);
             toast.success('Dispositivo actualizado');
           } else {
-            await netbackupService.createDevice({ ...payload, hardwareId: values.hardwareId, sshPassword: values.sshPassword });
+            await netbackupService.createDevice({ ...payload, hardwareId: values.hardwareId, password: values.password });
             toast.success('Dispositivo creado');
           }
           onSaved();

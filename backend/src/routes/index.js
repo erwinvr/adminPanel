@@ -26,6 +26,7 @@ import publicRoutes from './public.routes.js';
 import backupRoutes from './backup.routes.js';
 import vulnRoutes from './vuln.routes.js';
 import netbackupRoutes from './netbackup.routes.js';
+import complianceRoutes from './compliance.routes.js';
 import smtpRoutes from './smtp.routes.js';
 import m365Routes from './m365.routes.js';
 
@@ -49,6 +50,11 @@ router.use('/shares', shareRoutes);
 router.use('/public', publicRoutes);
 router.use('/backups', backupRoutes);
 router.use('/vuln', vulnRoutes);
+// Montada ANTES de "/netbackup" a propósito: es más específica
+// ("/netbackup/compliance"), y aunque Express normalmente sigue
+// probando el próximo middleware si un sub-router no matchea nada,
+// mejor no depender de ese fallthrough.
+router.use('/netbackup/compliance', complianceRoutes);
 router.use('/netbackup', netbackupRoutes);
 router.use('/smtp', smtpRoutes);
 router.use('/m365', m365Routes);

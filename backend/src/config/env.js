@@ -61,6 +61,12 @@ const schema = Joi.object({
       'node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"',
     'string.hex': 'M365_ENCRYPTION_KEY debe estar en formato hexadecimal',
   }),
+
+  // Microservicio Python (netbackup-agent) para los drivers de "Backup
+  // Networking" que no son SSH crudo (napalm_ios, fortios_api) — el
+  // default ya apunta al hostname del servicio en docker-compose, así
+  // que no hace falta declarar esta variable en los .env existentes.
+  NETBACKUP_MICROSERVICE_URL: Joi.string().uri().default('http://netbackup-agent:8000'),
 }).unknown(true); // permite otras variables del sistema sin rechazarlas
 
 const { value: validatedEnv, error } = schema.validate(process.env, {
@@ -108,4 +114,6 @@ export const env = {
   },
 
   m365EncryptionKey: validatedEnv.M365_ENCRYPTION_KEY,
+
+  netbackupMicroserviceUrl: validatedEnv.NETBACKUP_MICROSERVICE_URL,
 };

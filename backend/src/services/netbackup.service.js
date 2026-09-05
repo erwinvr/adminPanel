@@ -2,13 +2,21 @@
  * services/netbackup.service.js
  *
  * "Backup Networking": respaldo de configuración de equipos de
- * networking vía SSH. Cada dispositivo vinculado a una caja del
- * inventario de hardware (tipo 'networking', con IP de administración
- * cargada) tiene sus propias credenciales SSH, comando de extracción y
- * frecuencia de backup automático — mismo patrón que Active Directory/
- * Microsoft 365 (contraseña cifrada, 0/null de frecuencia = solo
- * manual), pero acá son VARIOS dispositivos, no una fila de
+ * networking. Cada dispositivo vinculado a una caja del inventario de
+ * hardware (tipo 'networking', con IP de administración cargada) tiene
+ * sus propias credenciales, un `driver` que decide CÓMO se extrae la
+ * config, y frecuencia de backup automático — mismo patrón que Active
+ * Directory/Microsoft 365 (contraseña cifrada, 0/null de frecuencia =
+ * solo manual), pero acá son VARIOS dispositivos, no una fila de
  * configuración única.
+ *
+ * Drivers soportados: `raw_ssh` (SSH + un comando de texto, ver
+ * integrations/networkBackup/sshClient.js — sigue resolviéndose acá
+ * mismo en Node) y `napalm_ios`/`fortios_api` (Cisco IOS-XE vía NAPALM,
+ * FortiGate vía su API REST — ambos resueltos por el microservicio
+ * Python `netbackup-agent`, ver integrations/networkBackup/
+ * microserviceClient.js, porque NAPALM es Python y FortiGate no tiene
+ * driver NAPALM mantenido).
  *
  * `runBackup()` se dispara de dos formas: manual (botón "Descargar
  * ahora", con `req` real de la sesión autenticada) o automática
@@ -22,6 +30,9 @@ import { netbackupRepository } from '../repositories/netbackup.repository.js';
 import { inventoryRepository } from '../repositories/inventory.repository.js';
 import { encryptSecret, decryptSecret } from '../utils/crypto.js';
 import { fetchDeviceConfig } from '../integrations/networkBackup/sshClient.js';
+import { fetchConfigViaMicroservice } from '../integrations/networkBackup/microserviceClient.js';
+import { normalizeForHash } from '../integrations/networkBackup/configNormalizer.js';
+import { complianceService } from './compliance.service.js';
 import { recordEvent } from '../audit/audit.service.js';
 import { NotFoundError, ValidationError, ConflictError } from '../errors/AppError.js';
 
@@ -52,7 +63,7 @@ export const netbackupService = {
     return netbackupRepository.listAvailableHardware();
   },
 
-  async createDevice(req, { hardwareId, sshPort, sshUsername, sshPassword, command, syncIntervalMinutes }) {
+  async createDevice(req, { hardwareId, driver, port, username, password, command, syncIntervalMinutes }) {
     await assertHardwareIsUsable(hardwareId);
 
     const existing = await netbackupRepository.findDeviceByHardwareId(hardwareId);
@@ -61,11 +72,12 @@ export const netbackupService = {
     const actorId = req.session.userId;
     const id = await netbackupRepository.createDevice({
       hardware_id: hardwareId,
-      ssh_port: sshPort,
-      ssh_username: sshUsername,
-      ssh_password_encrypted: encryptSecret(sshPassword),
-      ssh_password_preview: sshPassword.slice(-4),
-      command,
+      driver,
+      port,
+      username,
+      password_encrypted: encryptSecret(password),
+      password_preview: password.slice(-4),
+      command: driver === 'raw_ssh' ? command : null,
       sync_interval_minutes: syncIntervalMinutes || null,
       created_by: actorId,
       updated_by: actorId,
@@ -78,7 +90,7 @@ export const netbackupService = {
       resourceId: id,
       result: 'success',
       req,
-      metadata: { hardwareId, sshUsername, command },
+      metadata: { hardwareId, driver, username, command },
     });
 
     const all = await netbackupRepository.listDevices();
@@ -91,13 +103,17 @@ export const netbackupService = {
 
     const actorId = req.session.userId;
     const dbChanges = {};
-    if (changes.sshPort !== undefined) dbChanges.ssh_port = changes.sshPort;
-    if (changes.sshUsername !== undefined) dbChanges.ssh_username = changes.sshUsername;
-    if (changes.command !== undefined) dbChanges.command = changes.command;
+    if (changes.driver !== undefined) dbChanges.driver = changes.driver;
+    if (changes.port !== undefined) dbChanges.port = changes.port;
+    if (changes.username !== undefined) dbChanges.username = changes.username;
+    if (changes.command !== undefined) {
+      const effectiveDriver = changes.driver ?? existing.driver;
+      dbChanges.command = effectiveDriver === 'raw_ssh' ? changes.command : null;
+    }
     if (changes.syncIntervalMinutes !== undefined) dbChanges.sync_interval_minutes = changes.syncIntervalMinutes || null;
-    if (changes.sshPassword) {
-      dbChanges.ssh_password_encrypted = encryptSecret(changes.sshPassword);
-      dbChanges.ssh_password_preview = changes.sshPassword.slice(-4);
+    if (changes.password) {
+      dbChanges.password_encrypted = encryptSecret(changes.password);
+      dbChanges.password_preview = changes.password.slice(-4);
     }
     dbChanges.updated_by = actorId;
 
@@ -148,17 +164,36 @@ export const netbackupService = {
     const runId = await netbackupRepository.createRun({ deviceId, trigger, triggeredBy: actorId });
 
     try {
-      const password = decryptSecret(raw.ssh_password_encrypted);
-      const output = await fetchDeviceConfig({
-        host: device.managementIp,
-        port: device.sshPort,
-        username: device.sshUsername,
-        password,
-        command: device.command,
-      });
+      const password = decryptSecret(raw.password_encrypted);
+      const output =
+        device.driver === 'raw_ssh'
+          ? await fetchDeviceConfig({
+              host: device.managementIp,
+              port: device.port,
+              username: device.username,
+              password,
+              command: device.command,
+            })
+          : await fetchConfigViaMicroservice({
+              driver: device.driver,
+              host: device.managementIp,
+              port: device.port,
+              username: device.username,
+              password,
+            });
 
-      await netbackupRepository.finishRun(runId, { result: 'success', configOutput: output, configHash: hashConfig(output) });
+      await netbackupRepository.finishRun(runId, {
+        result: 'success',
+        configOutput: output,
+        // El hash se calcula sobre el texto NORMALIZADO (sin la línea de
+        // timestamp/contador de guardado que cada fabricante mete solo) —
+        // config_output guarda el texto crudo intacto, esto es solo para
+        // que dos backups con el mismo contenido real cuenten como la
+        // misma versión. Ver configNormalizer.js.
+        configHash: hashConfig(normalizeForHash(device.driver, output)),
+      });
       await netbackupRepository.updateDevice(deviceId, { last_run_at: new Date() });
+      await complianceService.evaluateDevice(req, device, output, runId);
 
       await recordEvent({
         userId: actorId,
@@ -214,22 +249,35 @@ export const netbackupService = {
     }));
   },
 
-  // Versiones (corridas exitosas) de un dispositivo, con
-  // `changedFromPrevious` marcando si el hash difiere del anterior en
-  // el tiempo — la primera versión conocida cuenta como "cambio"
-  // (no hay nada previo con qué compararla).
+  // Versiones de un dispositivo: SOLO las corridas donde el hash
+  // cambió respecto a la inmediata anterior — el resto de las
+  // ejecuciones (idénticas a la config vigente) ya quedan registradas
+  // en Auditoría (acción "netbackup.run", con su fecha y resultado), no
+  // hace falta repetirlas acá. `versionNumber` numera cada
+  // configuración DISTINTA por orden de primera aparición (1, 2, 3,
+  // ...) — si en algún momento la config vuelve a un valor visto antes,
+  // se repite el mismo número en vez de sumar uno nuevo.
   async listDeviceVersions(deviceId) {
     const device = await netbackupRepository.findDeviceById(deviceId);
     if (!device) throw new NotFoundError('Dispositivo no encontrado');
 
     const runs = await netbackupRepository.listSuccessfulRunsForDevice(deviceId);
     let previousHash = null;
-    const withDiff = runs.map((r) => {
+    let nextVersionNumber = 1;
+    const versionNumberByHash = new Map();
+    const changes = [];
+    for (const r of runs) {
       const changedFromPrevious = r.configHash !== previousHash;
       previousHash = r.configHash;
-      return { id: r.id, startedAt: r.startedAt, changedFromPrevious };
-    });
-    return withDiff.reverse(); // más nueva primero, para mostrar en la tabla
+      if (!versionNumberByHash.has(r.configHash)) {
+        versionNumberByHash.set(r.configHash, nextVersionNumber);
+        nextVersionNumber += 1;
+      }
+      if (changedFromPrevious) {
+        changes.push({ id: r.id, startedAt: r.startedAt, versionNumber: versionNumberByHash.get(r.configHash) });
+      }
+    }
+    return changes.reverse(); // más nueva primero, para mostrar en la tabla
   },
 
   // Diferencia línea por línea entre dos corridas exitosas del MISMO
@@ -245,7 +293,12 @@ export const netbackupService = {
       throw new ValidationError('Solo se pueden comparar corridas exitosas (con configuración guardada)');
     }
 
-    const parts = diffLines(fromRun.configOutput, toRun.configOutput);
+    // Mismo criterio que el hash: se diffea el texto NORMALIZADO — si no,
+    // Bitácora podría decir "sin cambios" (por hash) mientras el diff
+    // visual igual marca la línea de timestamp/contador como una
+    // diferencia, lo cual sería inconsistente.
+    const device = await netbackupRepository.findDeviceById(fromRun.deviceId);
+    const parts = diffLines(normalizeForHash(device.driver, fromRun.configOutput), normalizeForHash(device.driver, toRun.configOutput));
     return {
       fromStartedAt: fromRun.startedAt,
       toStartedAt: toRun.startedAt,
