@@ -9,4 +9,7 @@ export const saveSettingsSchema = Joi.object({
   // que el client secret de M365 — ver m365.validator.js).
   bindPassword: Joi.string().trim().min(1).max(500).allow('').optional(),
   baseDn: Joi.string().trim().min(1).max(500).required(),
+  // Minutos entre sincronizaciones automáticas — 0/null desactiva el
+  // job en segundo plano para esta integración (ver syncScheduler.js).
+  syncIntervalMinutes: Joi.number().integer().min(0).allow(null).optional(),
 });

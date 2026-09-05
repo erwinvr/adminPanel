@@ -60,7 +60,7 @@ export function BackupSettingsPage() {
 
   return (
     <Layout>
-      <h1 className="text-2xl font-semibold">Backups — Configuración</h1>
+      <h1 className="text-2xl font-semibold">Configuración</h1>
       <p className="topology-page__hint">
         Parámetros de conexión al servidor de Veeam Backup & Replication. Una cuenta con rol de solo lectura alcanza
         para sincronizar jobs y repositorios.

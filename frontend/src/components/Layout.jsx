@@ -90,7 +90,7 @@ const MANAGEMENT_SECTIONS = [
   },
   {
     key: 'backups',
-    label: 'Backups',
+    label: 'Veeam',
     icon: HardDrive,
     items: [{ path: '/backups/settings', label: 'Configuración', permission: PERMISSIONS.BACKUPS_EDIT, icon: Settings }],
   },

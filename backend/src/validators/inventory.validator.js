@@ -12,6 +12,7 @@ export const createInventoryItemSchema = Joi.object({
   hasSupport: Joi.boolean().required(),
   supportUntil: Joi.date().iso().allow(null).optional(),
   supportProviderId: Joi.string().uuid().allow(null).optional(),
+  managementIp: Joi.string().ip().allow('', null).optional(),
 });
 
 export const updateInventoryItemSchema = Joi.object({
@@ -22,4 +23,5 @@ export const updateInventoryItemSchema = Joi.object({
   hasSupport: Joi.boolean(),
   supportUntil: Joi.date().iso().allow(null),
   supportProviderId: Joi.string().uuid().allow(null),
+  managementIp: Joi.string().ip().allow('', null),
 }).min(1);

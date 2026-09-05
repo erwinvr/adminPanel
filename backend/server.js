@@ -11,6 +11,7 @@ import { app } from './src/app.js';
 import { env } from './src/config/env.js';
 import { logger } from './src/config/logger.js';
 import { checkDatabaseConnection, closeDatabaseConnection } from './src/config/database.js';
+import { startSyncScheduler, stopSyncScheduler } from './src/jobs/syncScheduler.js';
 
 async function start() {
   const databaseOk = await checkDatabaseConnection();
@@ -23,8 +24,11 @@ async function start() {
     logger.info(`Servidor escuchando en el puerto ${env.port} [${env.nodeEnv}]`);
   });
 
+  startSyncScheduler();
+
   const shutdown = async (signal) => {
     logger.info(`Señal ${signal} recibida. Iniciando apagado ordenado...`);
+    stopSyncScheduler();
     server.close(async () => {
       await closeDatabaseConnection();
       logger.info('Apagado completo.');

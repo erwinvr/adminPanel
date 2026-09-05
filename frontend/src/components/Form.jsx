@@ -134,7 +134,17 @@ function FieldInput({ field, value, onChange }) {
     return (
       <div className="flex flex-col gap-1.5">
         <p className="text-sm font-medium">{field.label}</p>
-        <div className="flex max-h-52 flex-col gap-2 overflow-y-auto rounded-md border p-3">
+        {/*
+          contain-content (CSS `contain: layout paint`) es necesario acá:
+          sin él, el modal que envuelve este formulario (Modal.jsx, con su
+          propio max-height + overflow-y-auto) termina midiendo un
+          scrollHeight que incluye el contenido SIN recortar de ESTA lista
+          (aunque acá ya se recorta a max-h-52) — el resultado es un scroll
+          fantasma en el modal que, al arrastrarlo, muestra espacio en
+          blanco. `contain-content` le dice al navegador que el layout/paint
+          de esta lista no se filtra hacia afuera, y elimina ese scroll.
+        */}
+        <div className="flex max-h-52 flex-col gap-2 overflow-y-auto rounded-md border p-3 contain-content">
           {(field.options ?? []).map((opt) => (
             <label key={opt.value} className="flex items-center gap-2 text-sm font-normal">
               <Checkbox

@@ -3,8 +3,12 @@
  *
  * Sincronización de licencias de Microsoft 365 vía Microsoft Graph
  * (client credentials — ver integrations/microsoft365/graphClient.js).
- * `sync()` es on-demand (botón "Sincronizar ahora" en el frontend), no
- * hay un job automático programado.
+ * `sync()` se dispara de dos formas: manual (botón "Sincronizar ahora",
+ * con `req` real de la sesión autenticada) o automática
+ * (jobs/syncScheduler.js, con `req = null` — sin usuario, se audita con
+ * userId null igual que un evento de sistema). La frecuencia del job
+ * automático es `sync_interval_minutes` en m365_settings (0/null =
+ * desactivado).
  */
 
 import { m365Repository } from '../repositories/m365.repository.js';
@@ -21,7 +25,14 @@ import { ValidationError } from '../errors/AppError.js';
 
 function toPublicSettings(row) {
   if (!row) {
-    return { tenantId: null, clientId: null, hasSecret: false, clientSecretPreview: null, lastSyncedAt: null };
+    return {
+      tenantId: null,
+      clientId: null,
+      hasSecret: false,
+      clientSecretPreview: null,
+      lastSyncedAt: null,
+      syncIntervalMinutes: null,
+    };
   }
   return {
     tenantId: row.tenant_id,
@@ -29,6 +40,7 @@ function toPublicSettings(row) {
     hasSecret: Boolean(row.client_secret_encrypted),
     clientSecretPreview: row.client_secret_preview,
     lastSyncedAt: row.last_synced_at,
+    syncIntervalMinutes: row.sync_interval_minutes,
   };
 }
 
@@ -37,11 +49,12 @@ export const m365Service = {
     return toPublicSettings(await m365Repository.getSettings());
   },
 
-  async saveSettings(req, { tenantId, clientId, clientSecret }) {
+  async saveSettings(req, { tenantId, clientId, clientSecret, syncIntervalMinutes }) {
     const actorId = req.session.userId;
     const changes = {
       tenant_id: tenantId,
       client_id: clientId,
+      sync_interval_minutes: syncIntervalMinutes || null,
       updated_by: actorId,
       updated_at: new Date(),
     };
@@ -59,19 +72,22 @@ export const m365Service = {
       resourceId: row.id,
       result: 'success',
       req,
-      metadata: { tenantId, clientId, secretUpdated: Boolean(clientSecret) },
+      metadata: { tenantId, clientId, syncIntervalMinutes: changes.sync_interval_minutes, secretUpdated: Boolean(clientSecret) },
     });
 
     return toPublicSettings(row);
   },
 
-  async sync(req) {
+  // `req` es null cuando lo dispara el job automático (jobs/syncScheduler.js)
+  // en vez del botón "Sincronizar ahora" — sin sesión de usuario.
+  async sync(req = null) {
     const settingsRow = await m365Repository.getSettings();
     if (!settingsRow?.tenant_id || !settingsRow?.client_id || !settingsRow?.client_secret_encrypted) {
       throw new ValidationError('Configurá el tenant, el client ID y el client secret antes de sincronizar');
     }
 
-    const actorId = req.session.userId;
+    const actorId = req?.session?.userId ?? null;
+    const trigger = req ? 'manual' : 'scheduled';
     const clientSecret = decryptSecret(settingsRow.client_secret_encrypted);
 
     let skus;
@@ -98,7 +114,7 @@ export const m365Service = {
         resourceId: settingsRow.id,
         result: 'failure',
         req,
-        metadata: { error: err.message },
+        metadata: { error: err.message, trigger },
       });
       throw err;
     }
@@ -138,7 +154,7 @@ export const m365Service = {
       resourceId: settingsRow.id,
       result: 'success',
       req,
-      metadata: { licensesCount: licenses.length, usersCount: users.length, mfaWarning },
+      metadata: { licensesCount: licenses.length, usersCount: users.length, mfaWarning, trigger },
     });
 
     return { licensesCount: licenses.length, usersCount: users.length, syncedAt: syncedAt.toISOString(), mfaWarning };

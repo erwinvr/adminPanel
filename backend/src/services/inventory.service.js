@@ -29,7 +29,7 @@ export const inventoryService = {
     return inventoryRepository.listItems();
   },
 
-  async createItem(req, { type, brand, model, officeId, hasSupport, supportUntil, supportProviderId }) {
+  async createItem(req, { type, brand, model, officeId, hasSupport, supportUntil, supportProviderId, managementIp }) {
     await assertOfficeExists(officeId);
     await assertProviderExists(supportProviderId);
     const actorId = req.session.userId;
@@ -41,6 +41,7 @@ export const inventoryService = {
           brand,
           model,
           office_id: officeId,
+          management_ip: managementIp || null,
           has_support: hasSupport,
           support_until: hasSupport ? supportUntil || null : null,
           support_provider_id: hasSupport ? supportProviderId || null : null,
@@ -81,6 +82,7 @@ export const inventoryService = {
     if (changes.brand !== undefined) dbChanges.brand = changes.brand;
     if (changes.model !== undefined) dbChanges.model = changes.model;
     if (changes.officeId !== undefined) dbChanges.office_id = changes.officeId;
+    if (changes.managementIp !== undefined) dbChanges.management_ip = changes.managementIp || null;
     if (changes.hasSupport !== undefined) dbChanges.has_support = changes.hasSupport;
     if (changes.supportUntil !== undefined) dbChanges.support_until = changes.supportUntil || null;
     if (changes.supportProviderId !== undefined) dbChanges.support_provider_id = changes.supportProviderId || null;

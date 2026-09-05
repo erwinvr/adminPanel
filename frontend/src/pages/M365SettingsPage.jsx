@@ -12,6 +12,7 @@ import { Layout } from '../components/Layout.jsx';
 import { Form } from '../components/Form.jsx';
 import { toast } from 'sonner';
 import { m365Service } from '../services/m365.service.js';
+import { SYNC_FREQUENCY_OPTIONS } from '../constants/syncFrequency.js';
 import { Button } from '@/components/ui/button.jsx';
 import { Alert, AlertDescription } from '@/components/ui/alert.jsx';
 
@@ -89,10 +90,18 @@ export function M365SettingsPage() {
                   : 'Client secret',
                 type: 'password',
               },
+              {
+                name: 'syncIntervalMinutes',
+                label: 'Frecuencia de sincronización automática',
+                type: 'select',
+                value: String(settings.syncIntervalMinutes ?? 0),
+                options: SYNC_FREQUENCY_OPTIONS,
+                required: true,
+              },
             ]}
             submitLabel="Guardar configuración"
             onSubmit={async (values) => {
-              await m365Service.saveSettings(values);
+              await m365Service.saveSettings({ ...values, syncIntervalMinutes: Number(values.syncIntervalMinutes) });
               toast.success('Configuración guardada');
               refresh();
             }}
@@ -100,6 +109,11 @@ export function M365SettingsPage() {
 
           <h2 className="mt-8 text-base font-semibold">Sincronización</h2>
           <p className="topology-page__hint">Última sincronización: {formatDateTime(settings.lastSyncedAt)}</p>
+          <p className="topology-page__hint">
+            {settings.syncIntervalMinutes
+              ? `Sincronización automática activa: ${SYNC_FREQUENCY_OPTIONS.find((o) => Number(o.value) === settings.syncIntervalMinutes)?.label.toLowerCase() ?? `cada ${settings.syncIntervalMinutes} min`}.`
+              : 'Sincronización automática desactivada — solo manual.'}
+          </p>
 
           <Button onClick={handleSync} disabled={syncing || !settings.hasSecret}>
             {syncing ? 'Sincronizando…' : 'Sincronizar ahora'}

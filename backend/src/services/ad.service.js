@@ -2,9 +2,12 @@
  * services/ad.service.js
  *
  * Sincronización con un Active Directory on-prem vía LDAP (ver
- * integrations/activeDirectory/ldapClient.js). `sync()` es on-demand
- * (botón "Sincronizar ahora" en el frontend), no hay un job automático
- * programado — mismo criterio que Microsoft 365 (m365.service.js).
+ * integrations/activeDirectory/ldapClient.js). `sync()` se dispara de
+ * dos formas: manual (botón "Sincronizar ahora", con `req` real de la
+ * sesión autenticada) o automática (jobs/syncScheduler.js, con
+ * `req = null` — sin usuario, se audita con userId null igual que un
+ * evento de sistema). La frecuencia del job automático es
+ * `sync_interval_minutes` en ad_settings (0/null = desactivado).
  */
 
 import { adRepository } from '../repositories/ad.repository.js';
@@ -15,7 +18,17 @@ import { ValidationError } from '../errors/AppError.js';
 
 function toPublicSettings(row) {
   if (!row) {
-    return { host: null, port: null, useTls: false, bindDn: null, baseDn: null, hasPassword: false, bindPasswordPreview: null, lastSyncedAt: null };
+    return {
+      host: null,
+      port: null,
+      useTls: false,
+      bindDn: null,
+      baseDn: null,
+      hasPassword: false,
+      bindPasswordPreview: null,
+      lastSyncedAt: null,
+      syncIntervalMinutes: null,
+    };
   }
   return {
     host: row.host,
@@ -26,6 +39,7 @@ function toPublicSettings(row) {
     hasPassword: Boolean(row.bind_password_encrypted),
     bindPasswordPreview: row.bind_password_preview,
     lastSyncedAt: row.last_synced_at,
+    syncIntervalMinutes: row.sync_interval_minutes,
   };
 }
 
@@ -34,7 +48,7 @@ export const adService = {
     return toPublicSettings(await adRepository.getSettings());
   },
 
-  async saveSettings(req, { host, port, useTls, bindDn, bindPassword, baseDn }) {
+  async saveSettings(req, { host, port, useTls, bindDn, bindPassword, baseDn, syncIntervalMinutes }) {
     const actorId = req.session.userId;
     const changes = {
       host,
@@ -42,6 +56,7 @@ export const adService = {
       use_tls: useTls,
       bind_dn: bindDn,
       base_dn: baseDn,
+      sync_interval_minutes: syncIntervalMinutes || null,
       updated_by: actorId,
       updated_at: new Date(),
     };
@@ -59,19 +74,22 @@ export const adService = {
       resourceId: row.id,
       result: 'success',
       req,
-      metadata: { host, port, useTls, bindDn, baseDn, passwordUpdated: Boolean(bindPassword) },
+      metadata: { host, port, useTls, bindDn, baseDn, syncIntervalMinutes: changes.sync_interval_minutes, passwordUpdated: Boolean(bindPassword) },
     });
 
     return toPublicSettings(row);
   },
 
-  async sync(req) {
+  // `req` es null cuando lo dispara el job automático (jobs/syncScheduler.js)
+  // en vez del botón "Sincronizar ahora" — sin sesión de usuario.
+  async sync(req = null) {
     const settingsRow = await adRepository.getSettings();
     if (!settingsRow?.host || !settingsRow?.bind_dn || !settingsRow?.base_dn || !settingsRow?.bind_password_encrypted) {
       throw new ValidationError('Configurá el servidor, el bind DN, el base DN y la contraseña antes de sincronizar');
     }
 
-    const actorId = req.session.userId;
+    const actorId = req?.session?.userId ?? null;
+    const trigger = req ? 'manual' : 'scheduled';
     const bindPassword = decryptSecret(settingsRow.bind_password_encrypted);
 
     let ldapUsers;
@@ -92,7 +110,7 @@ export const adService = {
         resourceId: settingsRow.id,
         result: 'failure',
         req,
-        metadata: { error: err.message },
+        metadata: { error: err.message, trigger },
       });
       throw err;
     }
@@ -118,7 +136,7 @@ export const adService = {
       resourceId: settingsRow.id,
       result: 'success',
       req,
-      metadata: { usersCount: users.length },
+      metadata: { usersCount: users.length, trigger },
     });
 
     return { usersCount: users.length, syncedAt: syncedAt.toISOString() };

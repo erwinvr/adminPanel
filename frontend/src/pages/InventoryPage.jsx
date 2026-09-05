@@ -91,7 +91,8 @@ export function InventoryPage() {
     <Layout>
       <h1 className="text-2xl font-semibold">Hardware</h1>
       <p className="topology-page__hint">
-        Alta, baja y modificación de hardware físico (servidores y networking): marca, modelo, ubicación y soporte de fábrica.
+        Alta, baja y modificación de hardware físico (servidores y networking): marca, modelo, ubicación, IP de
+        administración y soporte de fábrica.
       </p>
 
       <div className="my-4">{canEdit && <Button onClick={() => setFormTarget(null)}>+ Nuevo hardware</Button>}</div>
@@ -109,6 +110,7 @@ export function InventoryPage() {
             { key: 'brand', label: 'Marca' },
             { key: 'model', label: 'Modelo' },
             { key: 'officeName', label: 'Ubicación' },
+            { key: 'managementIp', label: 'IP de administración', render: (r) => (r.managementIp ? escapeHtml(r.managementIp) : '—') },
             { key: 'hasSupport', label: 'Soporte de fábrica', render: (r) => (r.hasSupport ? 'Sí' : 'No') },
             { key: 'supportUntil', label: 'Vigente hasta', render: (r) => (r.hasSupport ? formatDate(r.supportUntil) : '—') },
             {
@@ -180,6 +182,7 @@ function InventoryFormModal({ existing, onClose, onSaved }) {
           { name: 'brand', label: 'Marca', value: existing?.brand, required: true },
           { name: 'model', label: 'Modelo', value: existing?.model, required: true },
           { name: 'officeId', label: 'Ubicación (oficina)', type: 'select', value: existing?.officeId ?? officeOptions[0].value, options: officeOptions, required: true },
+          { name: 'managementIp', label: 'IP de administración (opcional)', value: existing?.managementIp },
           { name: 'hasSupport', label: 'Cuenta con soporte de fábrica', type: 'checkbox', value: existing?.hasSupport ?? false },
           {
             name: 'supportUntil',
@@ -204,6 +207,7 @@ function InventoryFormModal({ existing, onClose, onSaved }) {
             brand: values.brand.trim(),
             model: values.model.trim(),
             officeId: values.officeId,
+            managementIp: (values.managementIp || '').trim(),
             hasSupport: Boolean(values.hasSupport),
             supportUntil: values.hasSupport ? values.supportUntil || null : null,
             supportProviderId: values.hasSupport ? values.supportProviderId || null : null,

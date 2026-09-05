@@ -7,6 +7,7 @@ const INVENTORY_COLUMNS = [
   'h.model',
   'h.office_id as officeId',
   'o.name as officeName',
+  'h.management_ip as managementIp',
   'h.has_support as hasSupport',
   'h.support_until as supportUntil',
   'h.support_provider_id as supportProviderId',
