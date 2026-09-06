@@ -21,6 +21,15 @@ esas, ver `git log`.
   `M365_ENCRYPTION_KEY` (obligatoria); sección de Docker no mencionaba
   el servicio `netbackup-agent`.
 
+### Cambiado
+
+- La página de Auditoría ya no muestra eventos de Backup Networking
+  (`netbackup.*` — dispositivos, corridas, reglas de compliance); esa
+  sección queda solo para eventos de seguridad. La tabla `audit_logs`
+  es inmutable por diseño (trigger de PostgreSQL que rechaza
+  UPDATE/DELETE), así que los eventos ya guardados no se borraron —
+  se excluyeron de la consulta que alimenta esta página.
+
 ## [1.4] - 2026-09-06
 
 ### Agregado
