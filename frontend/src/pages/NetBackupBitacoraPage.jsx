@@ -116,6 +116,28 @@ function versionBadge(versionNumber) {
   return badgeHtml(`Config #${versionNumber}`, variant);
 }
 
+// Un panel del diff lado a lado — se monta dos veces (from/to) con los
+// mismos estilos, solo cambia la fuente de datos y a qué lado sincroniza
+// el scroll.
+function DiffPanel({ label, lines, panelRef, onScroll }) {
+  return (
+    <div>
+      <p className="mb-1 text-xs font-medium text-muted-foreground">{label}</p>
+      <pre
+        ref={panelRef}
+        onScroll={onScroll}
+        className="max-h-[32rem] overflow-auto rounded-md border p-3 font-mono text-xs leading-5"
+      >
+        {lines.map((l, i) => (
+          <div key={i} className={LINE_STYLE[l.kind]}>
+            {l.text || ' '}
+          </div>
+        ))}
+      </pre>
+    </div>
+  );
+}
+
 export function NetBackupBitacoraPage() {
   const [summary, setSummary] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -293,34 +315,18 @@ export function NetBackupBitacoraPage() {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <p className="mb-1 text-xs font-medium text-muted-foreground">{formatDateTime(diffResult.fromStartedAt)}</p>
-                    <pre
-                      ref={leftPanelRef}
-                      onScroll={syncScroll(leftPanelRef, rightPanelRef)}
-                      className="max-h-[32rem] overflow-auto rounded-md border p-3 font-mono text-xs leading-5"
-                    >
-                      {left.map((l, i) => (
-                        <div key={i} className={LINE_STYLE[l.kind]}>
-                          {l.text || ' '}
-                        </div>
-                      ))}
-                    </pre>
-                  </div>
-                  <div>
-                    <p className="mb-1 text-xs font-medium text-muted-foreground">{formatDateTime(diffResult.toStartedAt)}</p>
-                    <pre
-                      ref={rightPanelRef}
-                      onScroll={syncScroll(rightPanelRef, leftPanelRef)}
-                      className="max-h-[32rem] overflow-auto rounded-md border p-3 font-mono text-xs leading-5"
-                    >
-                      {right.map((l, i) => (
-                        <div key={i} className={LINE_STYLE[l.kind]}>
-                          {l.text || ' '}
-                        </div>
-                      ))}
-                    </pre>
-                  </div>
+                  <DiffPanel
+                    label={formatDateTime(diffResult.fromStartedAt)}
+                    lines={left}
+                    panelRef={leftPanelRef}
+                    onScroll={syncScroll(leftPanelRef, rightPanelRef)}
+                  />
+                  <DiffPanel
+                    label={formatDateTime(diffResult.toStartedAt)}
+                    lines={right}
+                    panelRef={rightPanelRef}
+                    onScroll={syncScroll(rightPanelRef, leftPanelRef)}
+                  />
                 </div>
               </CardContent>
             </Card>

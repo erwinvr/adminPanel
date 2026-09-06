@@ -111,6 +111,11 @@ export function InventoryPage() {
             { key: 'model', label: 'Modelo' },
             { key: 'officeName', label: 'Ubicación' },
             { key: 'managementIp', label: 'IP de administración', render: (r) => (r.managementIp ? escapeHtml(r.managementIp) : '—') },
+            {
+              key: 'includeInTopology',
+              label: 'Topología de Red',
+              render: (r) => (r.type === 'networking' ? (r.includeInTopology ? 'Sí' : 'No') : '—'),
+            },
             { key: 'hasSupport', label: 'Soporte de fábrica', render: (r) => (r.hasSupport ? 'Sí' : 'No') },
             { key: 'supportUntil', label: 'Vigente hasta', render: (r) => (r.hasSupport ? formatDate(r.supportUntil) : '—') },
             {
@@ -183,6 +188,13 @@ function InventoryFormModal({ existing, onClose, onSaved }) {
           { name: 'model', label: 'Modelo', value: existing?.model, required: true },
           { name: 'officeId', label: 'Ubicación (oficina)', type: 'select', value: existing?.officeId ?? officeOptions[0].value, options: officeOptions, required: true },
           { name: 'managementIp', label: 'IP de administración (opcional)', value: existing?.managementIp },
+          {
+            name: 'includeInTopology',
+            label: 'Incluir en Topología de Red (solo equipos de networking)',
+            type: 'checkbox',
+            value: existing?.includeInTopology ?? false,
+            enabledWhen: (values) => values.type === 'networking',
+          },
           { name: 'hasSupport', label: 'Cuenta con soporte de fábrica', type: 'checkbox', value: existing?.hasSupport ?? false },
           {
             name: 'supportUntil',
@@ -208,6 +220,7 @@ function InventoryFormModal({ existing, onClose, onSaved }) {
             model: values.model.trim(),
             officeId: values.officeId,
             managementIp: (values.managementIp || '').trim(),
+            includeInTopology: values.type === 'networking' ? Boolean(values.includeInTopology) : false,
             hasSupport: Boolean(values.hasSupport),
             supportUntil: values.hasSupport ? values.supportUntil || null : null,
             supportProviderId: values.hasSupport ? values.supportProviderId || null : null,

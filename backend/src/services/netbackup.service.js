@@ -32,6 +32,7 @@ import { encryptSecret, decryptSecret } from '../utils/crypto.js';
 import { fetchDeviceConfig } from '../integrations/networkBackup/sshClient.js';
 import { fetchConfigViaMicroservice } from '../integrations/networkBackup/microserviceClient.js';
 import { normalizeForHash } from '../integrations/networkBackup/configNormalizer.js';
+import { RAW_SSH_DRIVER, driverRequiresCommand } from '../integrations/networkBackup/drivers.js';
 import { complianceService } from './compliance.service.js';
 import { recordEvent } from '../audit/audit.service.js';
 import { NotFoundError, ValidationError, ConflictError } from '../errors/AppError.js';
@@ -77,7 +78,7 @@ export const netbackupService = {
       username,
       password_encrypted: encryptSecret(password),
       password_preview: password.slice(-4),
-      command: driver === 'raw_ssh' ? command : null,
+      command: driverRequiresCommand(driver) ? command : null,
       sync_interval_minutes: syncIntervalMinutes || null,
       created_by: actorId,
       updated_by: actorId,
@@ -93,8 +94,7 @@ export const netbackupService = {
       metadata: { hardwareId, driver, username, command },
     });
 
-    const all = await netbackupRepository.listDevices();
-    return all.find((d) => d.id === id);
+    return netbackupRepository.findDeviceWithHardwareById(id);
   },
 
   async updateDevice(req, id, changes) {
@@ -108,7 +108,7 @@ export const netbackupService = {
     if (changes.username !== undefined) dbChanges.username = changes.username;
     if (changes.command !== undefined) {
       const effectiveDriver = changes.driver ?? existing.driver;
-      dbChanges.command = effectiveDriver === 'raw_ssh' ? changes.command : null;
+      dbChanges.command = driverRequiresCommand(effectiveDriver) ? changes.command : null;
     }
     if (changes.syncIntervalMinutes !== undefined) dbChanges.sync_interval_minutes = changes.syncIntervalMinutes || null;
     if (changes.password) {
@@ -129,8 +129,7 @@ export const netbackupService = {
       metadata: { changes: Object.keys(changes) },
     });
 
-    const all = await netbackupRepository.listDevices();
-    return all.find((d) => d.id === id);
+    return netbackupRepository.findDeviceWithHardwareById(id);
   },
 
   async deleteDevice(req, id) {
@@ -153,11 +152,16 @@ export const netbackupService = {
 
   // `req` es null cuando lo dispara el job automático (jobs/syncScheduler.js).
   async runBackup(req, deviceId) {
-    const all = await netbackupRepository.listDevices();
-    const device = all.find((d) => d.id === deviceId);
+    // Dos consultas independientes en paralelo: `device` (columnas públicas,
+    // para la UI/auditoría) y `raw` (fila cruda, con password_encrypted —
+    // nunca se mezclan en una sola query a propósito, ver comentario de
+    // DEVICE_COLUMNS en el repository).
+    const [device, raw] = await Promise.all([
+      netbackupRepository.findDeviceWithHardwareById(deviceId),
+      netbackupRepository.findDeviceById(deviceId),
+    ]);
     if (!device) throw new NotFoundError('Dispositivo no encontrado');
 
-    const raw = await netbackupRepository.findDeviceById(deviceId);
     const actorId = req?.session?.userId ?? null;
     const trigger = req ? 'manual' : 'scheduled';
 
@@ -166,7 +170,7 @@ export const netbackupService = {
     try {
       const password = decryptSecret(raw.password_encrypted);
       const output =
-        device.driver === 'raw_ssh'
+        device.driver === RAW_SSH_DRIVER
           ? await fetchDeviceConfig({
               host: device.managementIp,
               port: device.port,
@@ -182,28 +186,32 @@ export const netbackupService = {
               password,
             });
 
-      await netbackupRepository.finishRun(runId, {
-        result: 'success',
-        configOutput: output,
-        // El hash se calcula sobre el texto NORMALIZADO (sin la línea de
-        // timestamp/contador de guardado que cada fabricante mete solo) —
-        // config_output guarda el texto crudo intacto, esto es solo para
-        // que dos backups con el mismo contenido real cuenten como la
-        // misma versión. Ver configNormalizer.js.
-        configHash: hashConfig(normalizeForHash(device.driver, output)),
-      });
-      await netbackupRepository.updateDevice(deviceId, { last_run_at: new Date() });
-      await complianceService.evaluateDevice(req, device, output, runId);
-
-      await recordEvent({
-        userId: actorId,
-        action: 'netbackup.run',
-        resource: 'netbackup_device',
-        resourceId: deviceId,
-        result: 'success',
-        req,
-        metadata: { device: deviceLabel(device), trigger, configLength: output.length },
-      });
+      // Las 4 operaciones de acá abajo son independientes entre sí (ninguna
+      // lee lo que escribió otra) — corren en paralelo en vez de una
+      // detrás de otra.
+      await Promise.all([
+        netbackupRepository.finishRun(runId, {
+          result: 'success',
+          configOutput: output,
+          // El hash se calcula sobre el texto NORMALIZADO (sin la línea de
+          // timestamp/contador de guardado que cada fabricante mete solo) —
+          // config_output guarda el texto crudo intacto, esto es solo para
+          // que dos backups con el mismo contenido real cuenten como la
+          // misma versión. Ver configNormalizer.js.
+          configHash: hashConfig(normalizeForHash(device.driver, output)),
+        }),
+        netbackupRepository.updateDevice(deviceId, { last_run_at: new Date() }),
+        complianceService.evaluateDevice(req, device, output, runId),
+        recordEvent({
+          userId: actorId,
+          action: 'netbackup.run',
+          resource: 'netbackup_device',
+          resourceId: deviceId,
+          result: 'success',
+          req,
+          metadata: { device: deviceLabel(device), trigger, configLength: output.length },
+        }),
+      ]);
 
       return { runId, configLength: output.length };
     } catch (err) {

@@ -17,9 +17,8 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from app.drivers.fortios_driver import FortiosExtractionError
+from app.drivers.errors import NetbackupDriverError
 from app.drivers.fortios_driver import fetch_config as fetch_fortios_config
-from app.drivers.napalm_driver import NapalmExtractionError
 from app.drivers.napalm_driver import fetch_config as fetch_napalm_config
 
 app = FastAPI(title="netbackup-agent")
@@ -45,7 +44,7 @@ def extract(payload: ExtractRequest):
             config = fetch_napalm_config(payload.host, payload.port, payload.username, payload.password)
         else:
             config = fetch_fortios_config(payload.host, payload.port, payload.username, payload.password)
-    except (NapalmExtractionError, FortiosExtractionError) as exc:
+    except NetbackupDriverError as exc:
         return JSONResponse(status_code=502, content={"error": str(exc)})
 
     return {"config": config}

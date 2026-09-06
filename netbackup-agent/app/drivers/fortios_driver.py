@@ -15,6 +15,8 @@ versionamiento/diff ya existente, sin parsear nada acá.
 import requests
 import urllib3
 
+from app.drivers.errors import NetbackupDriverError
+
 # Los FortiGate en la práctica casi siempre usan un certificado
 # autofirmado en la interfaz de administración — verificar TLS acá
 # rompería el caso normal. Se acepta ese trade-off (mismo nivel de
@@ -23,10 +25,6 @@ import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 CONNECT_TIMEOUT_SECONDS = 20
-
-
-class FortiosExtractionError(Exception):
-    pass
 
 
 def fetch_config(host: str, port: int, username: str, password: str) -> str:
@@ -41,14 +39,14 @@ def fetch_config(host: str, port: int, username: str, password: str) -> str:
             timeout=CONNECT_TIMEOUT_SECONDS,
         )
     except requests.RequestException as exc:
-        raise FortiosExtractionError(f"No se pudo conectar a la API de FortiGate: {exc}") from exc
+        raise NetbackupDriverError(f"No se pudo conectar a la API de FortiGate: {exc}") from exc
 
     if login_response.status_code != 200 or not login_response.text.strip().startswith('["1"'):
-        raise FortiosExtractionError("Login rechazado por FortiGate — revisá usuario y contraseña")
+        raise NetbackupDriverError("Login rechazado por FortiGate — revisá usuario y contraseña")
 
     csrf_token = session.cookies.get("ccsrftoken", "").strip('"')
     if not csrf_token:
-        raise FortiosExtractionError("FortiGate no devolvió un token CSRF tras el login")
+        raise NetbackupDriverError("FortiGate no devolvió un token CSRF tras el login")
 
     try:
         backup_response = session.get(
@@ -58,7 +56,7 @@ def fetch_config(host: str, port: int, username: str, password: str) -> str:
             timeout=CONNECT_TIMEOUT_SECONDS,
         )
     except requests.RequestException as exc:
-        raise FortiosExtractionError(f"No se pudo descargar el backup de configuración: {exc}") from exc
+        raise NetbackupDriverError(f"No se pudo descargar el backup de configuración: {exc}") from exc
     finally:
         try:
             session.post(f"{base_url}/logout", timeout=CONNECT_TIMEOUT_SECONDS)
@@ -66,6 +64,6 @@ def fetch_config(host: str, port: int, username: str, password: str) -> str:
             pass  # cerrar sesión es buena práctica, pero no debe tapar un error real de la descarga
 
     if backup_response.status_code != 200 or not backup_response.text.strip():
-        raise FortiosExtractionError(f"No se pudo obtener el backup de configuración (HTTP {backup_response.status_code})")
+        raise NetbackupDriverError(f"No se pudo obtener el backup de configuración (HTTP {backup_response.status_code})")
 
     return backup_response.text

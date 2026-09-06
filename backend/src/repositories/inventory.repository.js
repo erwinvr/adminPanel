@@ -12,6 +12,7 @@ const INVENTORY_COLUMNS = [
   'h.support_until as supportUntil',
   'h.support_provider_id as supportProviderId',
   'p.name as supportProviderName',
+  'h.include_in_topology as includeInTopology',
 ];
 
 export const inventoryRepository = {

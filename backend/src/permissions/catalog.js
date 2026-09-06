@@ -57,6 +57,8 @@ export const PERMISSIONS = Object.freeze({
 
   SMTP_EDIT: 'smtp.edit',
 
+  NETWORK_TOPOLOGY_VIEW: 'network_topology.view',
+
   M365_VIEW: 'm365.view',
   M365_EDIT: 'm365.edit',
 });
@@ -144,6 +146,12 @@ export const PERMISSION_DEFINITIONS = [
     code: PERMISSIONS.SMTP_EDIT,
     module: 'smtp',
     description: 'Configurar el servidor SMTP saliente y enviar correos de prueba',
+  },
+
+  {
+    code: PERMISSIONS.NETWORK_TOPOLOGY_VIEW,
+    module: 'network_topology',
+    description: 'Ver el dashboard de Topología de Red (interconexión inferida entre equipos de networking)',
   },
 
   { code: PERMISSIONS.M365_VIEW, module: 'm365', description: 'Ver licencias y usuarios sincronizados desde Microsoft 365' },

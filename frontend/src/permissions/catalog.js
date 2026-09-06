@@ -57,6 +57,8 @@ export const PERMISSIONS = Object.freeze({
 
   SMTP_EDIT: 'smtp.edit',
 
+  NETWORK_TOPOLOGY_VIEW: 'network_topology.view',
+
   M365_VIEW: 'm365.view',
   M365_EDIT: 'm365.edit',
 });

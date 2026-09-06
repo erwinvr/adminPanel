@@ -9,11 +9,9 @@ no hace falta duplicar lógica de reintento en este microservicio).
 
 from napalm import get_network_driver
 
+from app.drivers.errors import NetbackupDriverError
+
 CONNECT_TIMEOUT_SECONDS = 20
-
-
-class NapalmExtractionError(Exception):
-    pass
 
 
 def fetch_config(host: str, port: int, username: str, password: str) -> str:
@@ -30,7 +28,7 @@ def fetch_config(host: str, port: int, username: str, password: str) -> str:
         device.open()
         config = device.get_config()
     except Exception as exc:  # napalm expone excepciones de netmiko/paramiko sin una jerarquía propia estable
-        raise NapalmExtractionError(
+        raise NetbackupDriverError(
             f"No se pudo conectar/extraer la configuración vía NAPALM (revisá host, puerto y credenciales): {exc}"
         ) from exc
     finally:
@@ -41,6 +39,6 @@ def fetch_config(host: str, port: int, username: str, password: str) -> str:
 
     running_config = config.get("running", "")
     if not running_config:
-        raise NapalmExtractionError("NAPALM se conectó pero no devolvió una configuración 'running' para este equipo")
+        raise NetbackupDriverError("NAPALM se conectó pero no devolvió una configuración 'running' para este equipo")
 
     return running_config

@@ -57,6 +57,26 @@ function ruleAppliesToDriver(rule, driver) {
   return !rule.driver || rule.driver === driver;
 }
 
+// Cola común de createRule/updateRule: auditar el escrito, releer la
+// regla ya guardada, y re-evaluarla contra el estado actual de los
+// dispositivos a los que aplica — lo único que cambia entre alta y
+// edición es la acción/metadata del evento de auditoría.
+async function finalizeRuleWrite({ req, actorId, id, action, metadata }) {
+  await recordEvent({
+    userId: actorId,
+    action,
+    resource: 'compliance_rule',
+    resourceId: id,
+    result: 'success',
+    req,
+    metadata,
+  });
+
+  const rule = await complianceRepository.findRuleById(id);
+  await complianceService.evaluateRuleAcrossDevices(rule);
+  return rule;
+}
+
 export const complianceService = {
   listRules() {
     return complianceRepository.listRules();
@@ -80,19 +100,13 @@ export const complianceService = {
       updated_by: actorId,
     });
 
-    await recordEvent({
-      userId: actorId,
-      action: 'netbackup.compliance.rule_create',
-      resource: 'compliance_rule',
-      resourceId: id,
-      result: 'success',
+    return finalizeRuleWrite({
       req,
+      actorId,
+      id,
+      action: 'netbackup.compliance.rule_create',
       metadata: { name: data.name, driver: data.driver, mode: data.mode },
     });
-
-    const rule = await complianceRepository.findRuleById(id);
-    await complianceService.evaluateRuleAcrossDevices(rule);
-    return rule;
   },
 
   async updateRule(req, id, changes) {
@@ -117,19 +131,13 @@ export const complianceService = {
 
     await complianceRepository.updateRule(id, dbChanges);
 
-    await recordEvent({
-      userId: actorId,
-      action: 'netbackup.compliance.rule_update',
-      resource: 'compliance_rule',
-      resourceId: id,
-      result: 'success',
+    return finalizeRuleWrite({
       req,
+      actorId,
+      id,
+      action: 'netbackup.compliance.rule_update',
       metadata: { changes: Object.keys(changes) },
     });
-
-    const rule = await complianceRepository.findRuleById(id);
-    await complianceService.evaluateRuleAcrossDevices(rule);
-    return rule;
   },
 
   async deleteRule(req, id) {
@@ -158,20 +166,22 @@ export const complianceService = {
     const devices = await netbackupRepository.listDevices();
     const applicableDevices = rule.active ? devices.filter((d) => ruleAppliesToDriver(rule, d.driver)) : [];
 
-    for (const device of applicableDevices) {
-      const lastRun = await netbackupRepository.findLatestSuccessfulRunForDevice(device.id);
-      if (!lastRun) continue; // todavía no hay ningún backup exitoso contra el cual evaluar
+    // La última corrida de cada dispositivo se trae en paralelo (son
+    // consultas independientes); el cómputo de evaluateRule() es en
+    // memoria, así que se junta todo antes de escribir UNA sola vez.
+    const lastRuns = await Promise.all(
+      applicableDevices.map((device) => netbackupRepository.findLatestSuccessfulRunForDevice(device.id))
+    );
 
+    const results = [];
+    applicableDevices.forEach((device, i) => {
+      const lastRun = lastRuns[i];
+      if (!lastRun) return; // todavía no hay ningún backup exitoso contra el cual evaluar
       const { passed, matchedSnippet } = evaluateRule(rule, lastRun.configOutput);
-      await complianceRepository.upsertResult({
-        ruleId: rule.id,
-        deviceId: device.id,
-        runId: lastRun.id,
-        passed,
-        matchedSnippet,
-      });
-    }
+      results.push({ ruleId: rule.id, deviceId: device.id, runId: lastRun.id, passed, matchedSnippet });
+    });
 
+    await complianceRepository.upsertResults(results);
     await complianceRepository.deleteResultsForRuleExcept(
       rule.id,
       applicableDevices.map((d) => d.id)
@@ -185,13 +195,10 @@ export const complianceService = {
   async evaluateDevice(req, device, configText, runId) {
     const rules = await complianceRepository.listActiveRulesForDriver(device.driver);
 
-    let passedCount = 0;
-    for (const rule of rules) {
-      const { passed, matchedSnippet } = evaluateRule(rule, configText);
-      if (passed) passedCount += 1;
-      await complianceRepository.upsertResult({ ruleId: rule.id, deviceId: device.id, runId, passed, matchedSnippet });
-    }
+    const results = rules.map((rule) => ({ ruleId: rule.id, deviceId: device.id, runId, ...evaluateRule(rule, configText) }));
+    const passedCount = results.filter((r) => r.passed).length;
 
+    await complianceRepository.upsertResults(results);
     await complianceRepository.deleteResultsForDeviceExceptRules(
       device.id,
       rules.map((r) => r.id)

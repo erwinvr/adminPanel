@@ -123,7 +123,12 @@ function FieldInput({ field, value, onChange }) {
   if (field.type === 'checkbox') {
     return (
       <label className="flex items-center gap-2 text-sm font-normal" htmlFor={id}>
-        <Checkbox id={id} checked={Boolean(value)} onCheckedChange={(checked) => onChange(Boolean(checked))} />
+        <Checkbox
+          id={id}
+          checked={Boolean(value)}
+          onCheckedChange={(checked) => onChange(Boolean(checked))}
+          disabled={field.disabled}
+        />
         {field.label}
       </label>
     );

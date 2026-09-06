@@ -47,6 +47,10 @@ import { PublicDashboardPage } from './pages/PublicDashboardPage.jsx';
 // React Flow (usado solo acá) pesa bastante — se carga aparte para no
 // sumarse al bundle inicial de las demás páginas.
 const TopologyPage = lazy(() => import('./pages/TopologyPage.jsx').then((m) => ({ default: m.TopologyPage })));
+// React Flow también acá — mismo motivo, se carga aparte del bundle inicial.
+const NetworkTopologyPage = lazy(() =>
+  import('./pages/NetworkTopologyPage.jsx').then((m) => ({ default: m.NetworkTopologyPage }))
+);
 
 function ProtectedRoute({ permission, children }) {
   const { isAuthenticated, hasPermission, user } = useAuth();
@@ -116,6 +120,16 @@ export function App() {
           <ProtectedRoute permission={PERMISSIONS.TOPOLOGY_VIEW}>
             <Suspense fallback={<p className="p-6 text-muted-foreground">Cargando…</p>}>
               <TopologyPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/network-topology"
+        element={
+          <ProtectedRoute permission={PERMISSIONS.NETWORK_TOPOLOGY_VIEW}>
+            <Suspense fallback={<p className="p-6 text-muted-foreground">Cargando…</p>}>
+              <NetworkTopologyPage />
             </Suspense>
           </ProtectedRoute>
         }

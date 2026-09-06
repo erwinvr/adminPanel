@@ -18,6 +18,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { badgeHtml } from '@/lib/badgeHtml.js';
 import { escapeHtml } from '@/lib/escapeHtml.js';
+import { downloadTextFile } from '@/lib/downloadTextFile.js';
 
 const RESULT_LABEL = { success: 'Éxito', failure: 'Error' };
 const RESULT_VARIANT = { success: 'success', failure: 'destructive' };
@@ -26,16 +27,6 @@ const TRIGGER_LABEL = { manual: 'Manual', scheduled: 'Automático' };
 function formatDateTime(iso) {
   if (!iso) return '—';
   return new Date(iso).toLocaleString('es-BO');
-}
-
-function downloadTextFile(filename, content) {
-  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
 }
 
 export function NetBackupHistoryPage() {

@@ -13,6 +13,7 @@ export const createInventoryItemSchema = Joi.object({
   supportUntil: Joi.date().iso().allow(null).optional(),
   supportProviderId: Joi.string().uuid().allow(null).optional(),
   managementIp: Joi.string().ip().allow('', null).optional(),
+  includeInTopology: Joi.boolean().default(false),
 });
 
 export const updateInventoryItemSchema = Joi.object({
@@ -24,4 +25,5 @@ export const updateInventoryItemSchema = Joi.object({
   supportUntil: Joi.date().iso().allow(null),
   supportProviderId: Joi.string().uuid().allow(null),
   managementIp: Joi.string().ip().allow('', null),
+  includeInTopology: Joi.boolean(),
 }).min(1);

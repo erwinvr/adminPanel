@@ -29,7 +29,10 @@ export const inventoryService = {
     return inventoryRepository.listItems();
   },
 
-  async createItem(req, { type, brand, model, officeId, hasSupport, supportUntil, supportProviderId, managementIp }) {
+  async createItem(
+    req,
+    { type, brand, model, officeId, hasSupport, supportUntil, supportProviderId, managementIp, includeInTopology }
+  ) {
     await assertOfficeExists(officeId);
     await assertProviderExists(supportProviderId);
     const actorId = req.session.userId;
@@ -45,6 +48,7 @@ export const inventoryService = {
           has_support: hasSupport,
           support_until: hasSupport ? supportUntil || null : null,
           support_provider_id: hasSupport ? supportProviderId || null : null,
+          include_in_topology: includeInTopology ?? false,
           created_by: actorId,
           updated_by: actorId,
         })
@@ -86,6 +90,7 @@ export const inventoryService = {
     if (changes.hasSupport !== undefined) dbChanges.has_support = changes.hasSupport;
     if (changes.supportUntil !== undefined) dbChanges.support_until = changes.supportUntil || null;
     if (changes.supportProviderId !== undefined) dbChanges.support_provider_id = changes.supportProviderId || null;
+    if (changes.includeInTopology !== undefined) dbChanges.include_in_topology = changes.includeInTopology;
 
     // Si el ítem deja de tener soporte de fábrica, no tiene sentido
     // conservar una fecha de vencimiento o un proveedor de soporte.

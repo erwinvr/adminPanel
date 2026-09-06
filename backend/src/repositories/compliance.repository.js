@@ -46,18 +46,26 @@ export const complianceRepository = {
     return db('compliance_rules').where({ id }).del();
   },
 
-  // Upsert: solo interesa el estado ACTUAL (rule_id, device_id) es
-  // único — cada evaluación nueva pisa la anterior.
-  upsertResult({ ruleId, deviceId, runId, passed, matchedSnippet }) {
+  // Upsert en LOTE: solo interesa el estado ACTUAL (rule_id, device_id)
+  // es único — cada evaluación nueva pisa la anterior. Recibe todos los
+  // resultados ya calculados (evaluateRule es puro cómputo en memoria,
+  // no toca la DB) y los escribe en una sola consulta multi-fila en vez
+  // de una consulta por dispositivo/regla — evaluateDevice() corre en
+  // el hot path de cada backup exitoso, evaluateRuleAcrossDevices() en
+  // cada alta/edición de regla.
+  upsertResults(rows) {
+    if (rows.length === 0) return Promise.resolve();
     return db('compliance_results')
-      .insert({
-        rule_id: ruleId,
-        device_id: deviceId,
-        run_id: runId,
-        passed,
-        matched_snippet: matchedSnippet ?? null,
-        evaluated_at: db.fn.now(),
-      })
+      .insert(
+        rows.map(({ ruleId, deviceId, runId, passed, matchedSnippet }) => ({
+          rule_id: ruleId,
+          device_id: deviceId,
+          run_id: runId,
+          passed,
+          matched_snippet: matchedSnippet ?? null,
+          evaluated_at: db.fn.now(),
+        }))
+      )
       .onConflict(['rule_id', 'device_id'])
       .merge(['run_id', 'passed', 'matched_snippet', 'evaluated_at']);
   },

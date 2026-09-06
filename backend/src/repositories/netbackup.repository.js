@@ -37,6 +37,19 @@ export const netbackupRepository = {
       .orderBy(['h.brand', 'h.model']);
   },
 
+  // Mismas columnas que listDevices() (nunca password_encrypted — ver
+  // comentario arriba) pero para UN dispositivo puntual — evita traer
+  // la tabla entera con el JOIN a hardware solo para descartar todo
+  // menos una fila (lo que hacían createDevice/updateDevice/runBackup
+  // antes, con `listDevices().find(...)`).
+  findDeviceWithHardwareById(id) {
+    return db('netbackup_devices as d')
+      .join('hardware_inventory as h', 'h.id', 'd.hardware_id')
+      .select(DEVICE_COLUMNS)
+      .where('d.id', id)
+      .first();
+  },
+
   findDeviceById(id) {
     return db('netbackup_devices').where({ id }).first();
   },

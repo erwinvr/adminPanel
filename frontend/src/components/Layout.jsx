@@ -55,6 +55,7 @@ const DASHBOARD_ITEMS = [
   { path: '/dashboard/users', label: 'Usuarios', permission: PERMISSIONS.INSIGHTS_VIEW, icon: ChartColumn },
   { path: '/backups/dashboard', label: 'Backups', permission: PERMISSIONS.BACKUPS_VIEW, icon: HardDrive },
   { path: '/vuln/dashboard', label: 'Vulnerabilidades', permission: PERMISSIONS.VULN_VIEW, icon: ShieldAlert },
+  { path: '/network-topology', label: 'Topología de Red', permission: PERMISSIONS.NETWORK_TOPOLOGY_VIEW, icon: Router },
 ];
 
 const MANAGEMENT_SECTIONS = [

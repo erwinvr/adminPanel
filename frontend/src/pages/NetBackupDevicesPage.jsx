@@ -26,6 +26,7 @@ import { PERMISSIONS } from '../permissions/catalog.js';
 import { Button } from '@/components/ui/button.jsx';
 import { Alert, AlertDescription } from '@/components/ui/alert.jsx';
 import { escapeHtml } from '@/lib/escapeHtml.js';
+import { downloadTextFile } from '@/lib/downloadTextFile.js';
 
 function formatDateTime(iso) {
   if (!iso) return 'Nunca';
@@ -35,16 +36,6 @@ function formatDateTime(iso) {
 function frequencyLabel(minutes) {
   if (!minutes) return 'Manual';
   return SYNC_FREQUENCY_OPTIONS.find((o) => Number(o.value) === minutes)?.label ?? `Cada ${minutes} min`;
-}
-
-function downloadTextFile(filename, content) {
-  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
 }
 
 export function NetBackupDevicesPage() {
