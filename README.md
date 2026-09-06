@@ -69,8 +69,11 @@ Completar en `.env`:
 | `LOGIN_RATE_LIMIT_WINDOW_MS` / `LOGIN_RATE_LIMIT_MAX_ATTEMPTS` | Ventana y máximo de intentos de login por IP |
 | `ACCOUNT_LOCK_MAX_FAILED_ATTEMPTS` / `ACCOUNT_LOCK_DURATION_MS` | Umbral y duración del bloqueo de cuenta |
 | `ADMIN_USERNAME` / `ADMIN_EMAIL` / `ADMIN_INITIAL_PASSWORD` | Usadas SOLO por `npm run seed:run` para crear el usuario administrador inicial — sin valores por defecto a propósito (ver comentario en el archivo) |
+| `M365_ENCRYPTION_KEY` | Clave hex de 64 caracteres (AES-256) que cifra en reposo todos los secretos guardados en la app (M365, AD, Veeam, Vuln, Vault, SMTP, Backup Networking) — obligatoria pese al nombre histórico |
 
 **Nunca** commitear el archivo `.env` real — está excluido en `.gitignore`.
+
+> Manual paso a paso completo (dev y producción, con troubleshooting): [`docs/deployment.md`](docs/deployment.md).
 
 ## 4. Ejecución con Docker (recomendado)
 
@@ -82,8 +85,9 @@ docker compose up --build
 
 - Frontend + API: http://localhost:8080
 - Backend directo (debug): http://localhost:3000
+- Microservicio `netbackup-agent` (drivers Cisco/FortiGate de Backup Networking) directo: http://localhost:8001
 - PostgreSQL expuesto en `localhost:5432` (solo en dev)
-- El backend corre con `nodemon`: los cambios en `backend/src` se recargan solos.
+- El backend y `netbackup-agent` corren con recarga automática (`nodemon` / `uvicorn --reload`): los cambios en su código se aplican solos.
 
 **Primer arranque:** después de levantar los contenedores, correr las
 migraciones y el seed del usuario administrador inicial:
@@ -151,7 +155,7 @@ cd backend
 npm run migrate:latest      # aplica migraciones pendientes
 npm run migrate:rollback    # revierte el último batch
 npm run migrate:make nombre_migracion   # crea una nueva migración
-npm run seed:run            # ejecuta los seeds (se agregarán en Fase 4)
+npm run seed:run            # ejecuta los seeds (catálogo de permisos, roles, usuario admin inicial)
 ```
 
 Las migraciones viven en `database/migrations/`, versionadas y ejecutadas

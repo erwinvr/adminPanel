@@ -8,6 +8,19 @@ esas, ver `git log`.
 
 ## [Unreleased]
 
+### Agregado
+
+- `docs/deployment.md`: manual paso a paso de despliegue en
+  desarrollo y producción on-prem (variables de entorno, arquitectura
+  de servicios, actualización de una instalación existente,
+  resolución de problemas comunes).
+
+### Corregido
+
+- README: tabla de variables de entorno no incluía
+  `M365_ENCRYPTION_KEY` (obligatoria); sección de Docker no mencionaba
+  el servicio `netbackup-agent`.
+
 ## [1.4] - 2026-09-06
 
 ### Agregado
