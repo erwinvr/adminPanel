@@ -22,6 +22,9 @@ esas, ver `git log`.
   desbloquear). Nuevo `docs/active-directory.md` documentando el
   permiso preciso de AD que necesita la cuenta de servicio ("Write
   lockoutTime") y cómo delegarlo.
+- `docs/backlog.md`: features/correcciones identificadas durante el
+  desarrollo y dejadas fuera de alcance a propósito (seguridad, deuda
+  técnica, testing pendiente, verificación contra entornos reales).
 
 ### Corregido
 
