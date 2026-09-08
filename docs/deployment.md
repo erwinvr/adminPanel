@@ -179,6 +179,12 @@ Con el usuario administrador ya creado (§4 o §5, paso de seed):
    driver `raw_ssh` no necesita nada más; `napalm_ios`/`fortios_api`
    dependen de que el contenedor `netbackup-agent` esté corriendo
    (viene levantado por defecto en ambos `docker-compose*.yml`).
+5. Si vas a usar **Active Directory → Operaciones** (ver quién tiene
+   la cuenta bloqueada y desbloquearla desde la app): la cuenta de
+   servicio configurada en "Active Directory → Configuración" necesita
+   un permiso de AD adicional al de lectura que ya usa para
+   sincronizar — ver [`docs/active-directory.md`](active-directory.md)
+   para el permiso preciso y cómo delegarlo.
 
 ## 7. Ejecución sin Docker (desarrollo puntual)
 

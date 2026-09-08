@@ -37,6 +37,7 @@ import {
   Router,
   History,
   GitCompare,
+  Unlock,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { toast } from 'sonner';
@@ -90,6 +91,7 @@ const MANAGEMENT_SECTIONS = [
     items: [
       { path: '/ad/settings', label: 'Configuración', permission: PERMISSIONS.AD_EDIT, icon: Settings },
       { path: '/ad/users', label: 'Usuarios del AD', permission: PERMISSIONS.AD_VIEW, icon: Users },
+      { path: '/ad/operations', label: 'Operaciones', permission: PERMISSIONS.AD_OPERATIONS_VIEW, icon: Unlock },
     ],
   },
   {

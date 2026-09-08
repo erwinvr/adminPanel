@@ -19,7 +19,7 @@
 import ldap from 'ldapjs';
 import { AppError } from '../../errors/AppError.js';
 
-const SEARCH_ATTRIBUTES = ['sAMAccountName', 'displayName', 'cn', 'whenCreated', 'lastLogonTimestamp', 'pwdLastSet', 'userAccountControl', 'distinguishedName'];
+const SEARCH_ATTRIBUTES = ['sAMAccountName', 'displayName', 'cn', 'whenCreated', 'lastLogonTimestamp', 'pwdLastSet', 'userAccountControl', 'distinguishedName', 'lockoutTime'];
 const USER_FILTER = '(&(objectClass=user)(objectCategory=person))';
 const UAC_ACCOUNT_DISABLED = 0x2;
 
@@ -120,10 +120,75 @@ export function searchUsers({ host, port, useTls, bindDn, bindPassword, baseDn }
             lastLoginAt: filetimeToDate(attrValue(entry, 'lastLogonTimestamp')),
             passwordLastSetAt: filetimeToDate(attrValue(entry, 'pwdLastSet')),
             enabled: (uac & UAC_ACCOUNT_DISABLED) === 0,
+            lockoutTime: filetimeToDate(attrValue(entry, 'lockoutTime')),
           });
         });
         res.on('error', (err) => finish(new LdapError('Error durante la búsqueda LDAP (revisá el base DN): ' + err.message)));
         res.on('end', () => finish(null, users));
+      });
+    });
+  });
+}
+
+/**
+ * Desbloquea una cuenta poniendo `lockoutTime` en `0` vía LDAP MODIFY
+ * — el equivalente a lo que hace el propio Active Directory Users and
+ * Computers al desbloquear a mano. Usa la MISMA cuenta de servicio del
+ * sync (`bindDn`/`bindPassword`), que además del permiso de lectura
+ * que ya tiene para sincronizar necesita, específicamente, el permiso
+ * de AD "Write lockoutTime" sobre los objetos User — ver
+ * docs/active-directory.md para cómo delegarlo.
+ *
+ * @param {{ host: string, port: number, useTls: boolean, bindDn: string, bindPassword: string, targetDn: string }} params
+ */
+export function unlockUser({ host, port, useTls, bindDn, bindPassword, targetDn }) {
+  return new Promise((resolve, reject) => {
+    const protocol = useTls ? 'ldaps' : 'ldap';
+    const client = ldap.createClient({ url: `${protocol}://${host}:${port}`, connectTimeout: 8000, timeout: 15000 });
+
+    let settled = false;
+    const finish = (err) => {
+      if (settled) return;
+      settled = true;
+      client.unbind(() => {});
+      if (err) reject(err);
+      else resolve();
+    };
+
+    client.on('error', (err) => {
+      const detail = NETWORK_ERROR_CODES.has(err.code) ? 'revisá el host y el puerto. ' : '';
+      finish(new LdapError(`No se pudo conectar al servidor LDAP — ${detail}${err.message}`));
+    });
+
+    client.bind(bindDn, bindPassword, (bindErr) => {
+      if (bindErr) {
+        finish(new LdapError(describeBindError(bindErr)));
+        return;
+      }
+
+      const change = new ldap.Change({
+        operation: 'replace',
+        modification: { type: 'lockoutTime', values: ['0'] },
+      });
+
+      client.modify(targetDn, change, (modifyErr) => {
+        if (modifyErr) {
+          // Código LDAP 50 / InsufficientAccessRightsError: el bind DN
+          // no tiene el permiso de escritura sobre lockoutTime — el caso
+          // más común al activar esta función por primera vez, así que
+          // se traduce a un mensaje accionable en vez del error LDAP crudo.
+          if (modifyErr.name === 'InsufficientAccessRightsError' || modifyErr.code === 50) {
+            finish(
+              new LdapError(
+                'La cuenta de servicio no tiene permiso para desbloquear cuentas en AD — hay que delegarle "Write lockoutTime" sobre los usuarios (ver docs/active-directory.md).'
+              )
+            );
+            return;
+          }
+          finish(new LdapError('No se pudo desbloquear la cuenta: ' + modifyErr.message));
+          return;
+        }
+        finish(null);
       });
     });
   });

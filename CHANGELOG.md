@@ -14,6 +14,14 @@ esas, ver `git log`.
   desarrollo y producción on-prem (variables de entorno, arquitectura
   de servicios, actualización de una instalación existente,
   resolución de problemas comunes).
+- **Active Directory → Operaciones**: página nueva para ver los
+  usuarios con la cuenta bloqueada y desbloquearlos desde la app —
+  usa la misma cuenta de servicio configurada para el sync (LDAP
+  MODIFY sobre `lockoutTime`), con dos permisos nuevos y separados
+  (`AD_OPERATIONS_VIEW` para ver, `AD_OPERATIONS_UNLOCK` para
+  desbloquear). Nuevo `docs/active-directory.md` documentando el
+  permiso preciso de AD que necesita la cuenta de servicio ("Write
+  lockoutTime") y cómo delegarlo.
 
 ### Corregido
 

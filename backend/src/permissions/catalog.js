@@ -44,6 +44,9 @@ export const PERMISSIONS = Object.freeze({
   AD_VIEW: 'ad.view',
   AD_EDIT: 'ad.edit',
 
+  AD_OPERATIONS_VIEW: 'ad_operations.view',
+  AD_OPERATIONS_UNLOCK: 'ad_operations.unlock',
+
   INSIGHTS_VIEW: 'insights.view',
 
   BACKUPS_VIEW: 'backups.view',
@@ -106,6 +109,17 @@ export const PERMISSION_DEFINITIONS = [
 
   { code: PERMISSIONS.AD_VIEW, module: 'ad', description: 'Ver los usuarios sincronizados desde Active Directory' },
   { code: PERMISSIONS.AD_EDIT, module: 'ad', description: 'Configurar la conexión a Active Directory y disparar la sincronización' },
+
+  {
+    code: PERMISSIONS.AD_OPERATIONS_VIEW,
+    module: 'ad_operations',
+    description: 'Ver los usuarios de Active Directory con la cuenta bloqueada',
+  },
+  {
+    code: PERMISSIONS.AD_OPERATIONS_UNLOCK,
+    module: 'ad_operations',
+    description: 'Desbloquear cuentas de usuario de Active Directory',
+  },
 
   {
     code: PERMISSIONS.INSIGHTS_VIEW,

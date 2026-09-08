@@ -74,6 +74,7 @@ Completar en `.env`:
 **Nunca** commitear el archivo `.env` real — está excluido en `.gitignore`.
 
 > Manual paso a paso completo (dev y producción, con troubleshooting): [`docs/deployment.md`](docs/deployment.md).
+> Permisos de AD que necesita la cuenta de servicio (sync + desbloqueo de cuentas): [`docs/active-directory.md`](docs/active-directory.md).
 
 ## 4. Ejecución con Docker (recomendado)
 

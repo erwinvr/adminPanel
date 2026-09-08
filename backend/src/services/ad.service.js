@@ -12,9 +12,9 @@
 
 import { adRepository } from '../repositories/ad.repository.js';
 import { encryptSecret, decryptSecret } from '../utils/crypto.js';
-import { searchUsers } from '../integrations/activeDirectory/ldapClient.js';
+import { searchUsers, unlockUser as ldapUnlockUser } from '../integrations/activeDirectory/ldapClient.js';
 import { recordEvent } from '../audit/audit.service.js';
-import { ValidationError } from '../errors/AppError.js';
+import { NotFoundError, ValidationError } from '../errors/AppError.js';
 
 function toPublicSettings(row) {
   if (!row) {
@@ -123,6 +123,8 @@ export const adService = {
       last_login_at: u.lastLoginAt,
       password_last_set_at: u.passwordLastSetAt,
       enabled: u.enabled,
+      locked_out: Boolean(u.lockoutTime),
+      lockout_time: u.lockoutTime,
     }));
 
     await adRepository.replaceSyncedUsers(users);
@@ -144,5 +146,62 @@ export const adService = {
 
   listUsers() {
     return adRepository.listUsers();
+  },
+
+  listLockedUsers() {
+    return adRepository.listLockedUsers();
+  },
+
+  // Desbloquea contra el AD real (LDAP MODIFY, ver ldapClient.js) usando
+  // la MISMA cuenta de servicio del sync — no hace falta una cuenta
+  // separada, pero esa cuenta necesita el permiso de AD "Write
+  // lockoutTime" además del de lectura que ya usa para sincronizar (ver
+  // docs/active-directory.md).
+  async unlockUser(req, adUserId) {
+    const user = await adRepository.findUserById(adUserId);
+    if (!user) throw new NotFoundError('Usuario de AD no encontrado');
+    if (!user.locked_out) throw new ValidationError('Este usuario no tiene la cuenta bloqueada');
+
+    const settingsRow = await adRepository.getSettings();
+    if (!settingsRow?.host || !settingsRow?.bind_dn || !settingsRow?.bind_password_encrypted) {
+      throw new ValidationError('Configurá la conexión a Active Directory antes de poder desbloquear cuentas');
+    }
+
+    const actorId = req.session.userId;
+    const bindPassword = decryptSecret(settingsRow.bind_password_encrypted);
+
+    try {
+      await ldapUnlockUser({
+        host: settingsRow.host,
+        port: settingsRow.port,
+        useTls: settingsRow.use_tls,
+        bindDn: settingsRow.bind_dn,
+        bindPassword,
+        targetDn: user.distinguished_name,
+      });
+    } catch (err) {
+      await recordEvent({
+        userId: actorId,
+        action: 'ad.user_unlock',
+        resource: 'ad_user',
+        resourceId: adUserId,
+        result: 'failure',
+        req,
+        metadata: { samAccountName: user.sam_account_name, error: err.message },
+      });
+      throw err;
+    }
+
+    await adRepository.markUnlocked(adUserId);
+
+    await recordEvent({
+      userId: actorId,
+      action: 'ad.user_unlock',
+      resource: 'ad_user',
+      resourceId: adUserId,
+      result: 'success',
+      req,
+      metadata: { samAccountName: user.sam_account_name },
+    });
   },
 };

@@ -27,6 +27,7 @@ import { OfficesPage } from './pages/OfficesPage.jsx';
 import { VaultPage } from './pages/VaultPage.jsx';
 import { ADSettingsPage } from './pages/ADSettingsPage.jsx';
 import { ADUsersPage } from './pages/ADUsersPage.jsx';
+import { ADOperationsPage } from './pages/ADOperationsPage.jsx';
 import { UsersInsightsPage } from './pages/UsersInsightsPage.jsx';
 import { M365SettingsPage } from './pages/M365SettingsPage.jsx';
 import { M365LicensesPage } from './pages/M365LicensesPage.jsx';
@@ -203,6 +204,14 @@ export function App() {
         element={
           <ProtectedRoute permission={PERMISSIONS.AD_VIEW}>
             <ADUsersPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/ad/operations"
+        element={
+          <ProtectedRoute permission={PERMISSIONS.AD_OPERATIONS_VIEW}>
+            <ADOperationsPage />
           </ProtectedRoute>
         }
       />

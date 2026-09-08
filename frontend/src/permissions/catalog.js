@@ -44,6 +44,9 @@ export const PERMISSIONS = Object.freeze({
   AD_VIEW: 'ad.view',
   AD_EDIT: 'ad.edit',
 
+  AD_OPERATIONS_VIEW: 'ad_operations.view',
+  AD_OPERATIONS_UNLOCK: 'ad_operations.unlock',
+
   INSIGHTS_VIEW: 'insights.view',
 
   BACKUPS_VIEW: 'backups.view',

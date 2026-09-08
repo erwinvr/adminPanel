@@ -40,4 +40,28 @@ export const adRepository = {
       )
       .orderBy('display_name');
   },
+
+  listLockedUsers() {
+    return db('ad_users')
+      .select(
+        'id',
+        'distinguished_name as distinguishedName',
+        'sam_account_name as samAccountName',
+        'display_name as displayName',
+        'lockout_time as lockoutTime'
+      )
+      .where('locked_out', true)
+      .orderBy('lockout_time', 'desc');
+  },
+
+  findUserById(id) {
+    return db('ad_users').where({ id }).first();
+  },
+
+  // Se llama apenas el LDAP MODIFY de desbloqueo tiene éxito — refleja
+  // el cambio en la foto local al toque, sin esperar el próximo sync
+  // automático (ver ad.service.js#unlockUser).
+  markUnlocked(id) {
+    return db('ad_users').where({ id }).update({ locked_out: false, lockout_time: null });
+  },
 };

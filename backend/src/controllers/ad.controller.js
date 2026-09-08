@@ -19,3 +19,13 @@ export async function listUsers(req, res) {
   const users = await adService.listUsers();
   res.status(200).json({ success: true, data: users });
 }
+
+export async function listLockedUsers(req, res) {
+  const users = await adService.listLockedUsers();
+  res.status(200).json({ success: true, data: users });
+}
+
+export async function unlockUser(req, res) {
+  await adService.unlockUser(req, req.params.id);
+  res.status(204).send();
+}
