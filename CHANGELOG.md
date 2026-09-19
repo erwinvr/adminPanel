@@ -25,6 +25,10 @@ esas, ver `git log`.
 - `docs/backlog.md`: features/correcciones identificadas durante el
   desarrollo y dejadas fuera de alcance a propósito (seguridad, deuda
   técnica, testing pendiente, verificación contra entornos reales).
+- Botón **"Actualizar ahora"** en Active Directory → Operaciones:
+  dispara una sincronización completa sin esperar la frecuencia
+  automática configurada, habilitado con el mismo permiso de ver
+  bloqueados (`AD_OPERATIONS_VIEW`) — no requiere `AD_EDIT`.
 
 ### Corregido
 

@@ -29,6 +29,15 @@ router.get('/users', requirePermission(PERMISSIONS.AD_VIEW), asyncHandler(adCont
 // pero se mantiene el mismo criterio que netbackup.routes.js por las dudas.
 router.get('/users/locked', requirePermission(PERMISSIONS.AD_OPERATIONS_VIEW), asyncHandler(adController.listLockedUsers));
 
+// Mismo sync completo que "Configuración → Sincronizar ahora"
+// (adController.sync/adService.sync — no hay una variante "solo
+// bloqueados", el sync siempre trae la foto completa de usuarios), pero
+// expuesto con el permiso de OPERACIONES en vez de AD_EDIT: alguien que
+// solo puede ver/desbloquear bloqueados no debería necesitar el permiso
+// de configurar la conexión a AD para poder refrescar la lista antes de
+// esperar el próximo sync automático.
+router.post('/users/sync', requirePermission(PERMISSIONS.AD_OPERATIONS_VIEW), asyncHandler(adController.sync));
+
 router.post(
   '/users/:id/unlock',
   requirePermission(PERMISSIONS.AD_OPERATIONS_UNLOCK),

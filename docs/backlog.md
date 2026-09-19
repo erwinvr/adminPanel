@@ -80,11 +80,14 @@ registro de "esto lo vi, no lo tocaba porque no era lo que se pedía".
 - **SMTP** — el flujo completo (guardar config, error de conexión) se
   verificó; nunca se confirmó un envío exitoso real (no hay servidor
   SMTP de prueba disponible en este entorno).
-- **AD Operaciones (desbloqueo)** — el camino de error (LDAP
-  inalcanzable) se verificó de punta a punta; el camino de éxito
-  (LDAP MODIFY contra un AD real, con el permiso `Write lockoutTime`
-  ya delegado) no se pudo probar por no haber un Active Directory
-  real accesible desde este entorno.
+- ~~**AD Operaciones (desbloqueo)** — camino de éxito sin probar~~
+  **Resuelto** (2026-09-19): con un Active Directory real ya
+  accesible desde este entorno, se verificó de punta a punta —
+  sincronizar trajo un usuario realmente bloqueado, "Desbloquear" lo
+  sacó de la lista, y una segunda sincronización independiente contra
+  el AD real confirmó que el desbloqueo persistió ahí (no fue solo el
+  update local optimista). El permiso `Write lockoutTime` ya estaba
+  delegado en la cuenta de servicio.
 
 ## Funcionalidad nueva (candidatos, no comprometidos)
 

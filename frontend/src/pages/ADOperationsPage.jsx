@@ -21,6 +21,7 @@ import { toast } from 'sonner';
 import { adService } from '../services/ad.service.js';
 import { PERMISSIONS } from '../permissions/catalog.js';
 import { Alert, AlertDescription } from '@/components/ui/alert.jsx';
+import { Button } from '@/components/ui/button.jsx';
 import { escapeHtml } from '@/lib/escapeHtml.js';
 
 function formatDateTime(iso) {
@@ -36,6 +37,7 @@ export function ADOperationsPage() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [syncing, setSyncing] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -52,6 +54,23 @@ export function ADOperationsPage() {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  // Mismo sync completo que "Configuración → Sincronizar ahora" — no
+  // espera la próxima corrida automática (`sync_interval_minutes`).
+  // Al terminar, refresca la lista de bloqueados con la foto recién
+  // actualizada.
+  async function handleSyncNow() {
+    setSyncing(true);
+    try {
+      const result = await adService.syncFromOperations();
+      toast.success(`Sincronizado: ${result.usersCount} usuarios`);
+      await refresh();
+    } catch (err) {
+      toast.error('No se pudo sincronizar: ' + err.message);
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   const actions = [];
   if (canUnlock) {
@@ -82,6 +101,12 @@ export function ADOperationsPage() {
         Usuarios con la cuenta bloqueada según la última sincronización (ver "Active Directory → Configuración").
         Desbloquear actúa sobre el Active Directory real.
       </p>
+
+      <div className="my-4">
+        <Button onClick={handleSyncNow} disabled={syncing || loading}>
+          {syncing ? 'Actualizando…' : 'Actualizar ahora'}
+        </Button>
+      </div>
 
       {loading ? (
         <p className="text-muted-foreground">Cargando…</p>
