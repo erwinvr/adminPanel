@@ -36,6 +36,7 @@ export const adRepository = {
         'last_login_at as lastLoginAt',
         'password_last_set_at as passwordLastSetAt',
         'enabled',
+        'password_never_expires as passwordNeverExpires',
         'synced_at as syncedAt'
       )
       .orderBy('display_name');

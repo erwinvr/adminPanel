@@ -10,6 +10,10 @@ esas, ver `git log`.
 
 ### Agregado
 
+- **Active Directory → Usuarios del AD**: filtro "Solo contraseña que
+  nunca expira" y columna nueva mostrando ese estado — calculado del
+  bit `ADS_UF_DONT_EXPIRE_PASSWD` (0x10000) de `userAccountControl`
+  en cada sync.
 - **Active Directory → Administradores del AD**: página nueva que
   lista los usuarios con al menos un privilegio de administrador
   (Domain Admins, Enterprise Admins, Schema Admins o Administrators),

@@ -8,11 +8,12 @@
  * está habilitada o deshabilitada.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Layout } from '../components/Layout.jsx';
 import { DataTable } from '../components/DataTable.jsx';
 import { adService } from '../services/ad.service.js';
 import { Alert, AlertDescription } from '@/components/ui/alert.jsx';
+import { Checkbox } from '@/components/ui/checkbox.jsx';
 import { badgeHtml } from '@/lib/badgeHtml.js';
 import { escapeHtml } from '@/lib/escapeHtml.js';
 
@@ -25,6 +26,7 @@ export function ADUsersPage() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [onlyNeverExpires, setOnlyNeverExpires] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -38,6 +40,11 @@ export function ADUsersPage() {
     })();
   }, []);
 
+  const filteredUsers = useMemo(
+    () => (onlyNeverExpires ? users.filter((u) => u.passwordNeverExpires) : users),
+    [users, onlyNeverExpires]
+  );
+
   return (
     <Layout>
       <h1 className="text-2xl font-semibold">Active Directory — Usuarios</h1>
@@ -50,22 +57,38 @@ export function ADUsersPage() {
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       ) : (
-        <DataTable
-          columns={[
-            { key: 'displayName', label: 'Nombre completo', render: (r) => escapeHtml(r.displayName || r.samAccountName || '—') },
-            { key: 'samAccountName', label: 'Usuario' },
-            { key: 'createdAt', label: 'Fecha de creación', render: (r) => formatDateTime(r.createdAt) },
-            { key: 'lastLoginAt', label: 'Último login', render: (r) => formatDateTime(r.lastLoginAt) },
-            { key: 'passwordLastSetAt', label: 'Último cambio de clave', render: (r) => formatDateTime(r.passwordLastSetAt) },
-            {
-              key: 'enabled',
-              label: 'Estado',
-              render: (r) => badgeHtml(r.enabled ? 'Activo' : 'Inactivo', r.enabled ? 'success' : 'secondary'),
-            },
-          ]}
-          rows={users}
-          emptyMessage='No hay usuarios sincronizados todavía. Andá a "Configuración" y sincronizá.'
-        />
+        <>
+          <label className="my-4 flex w-fit items-center gap-2 text-sm">
+            <Checkbox checked={onlyNeverExpires} onCheckedChange={(checked) => setOnlyNeverExpires(checked === true)} />
+            Solo contraseña que nunca expira
+          </label>
+
+          <DataTable
+            columns={[
+              { key: 'displayName', label: 'Nombre completo', render: (r) => escapeHtml(r.displayName || r.samAccountName || '—') },
+              { key: 'samAccountName', label: 'Usuario' },
+              { key: 'createdAt', label: 'Fecha de creación', render: (r) => formatDateTime(r.createdAt) },
+              { key: 'lastLoginAt', label: 'Último login', render: (r) => formatDateTime(r.lastLoginAt) },
+              { key: 'passwordLastSetAt', label: 'Último cambio de clave', render: (r) => formatDateTime(r.passwordLastSetAt) },
+              {
+                key: 'passwordNeverExpires',
+                label: 'Contraseña nunca expira',
+                render: (r) => badgeHtml(r.passwordNeverExpires ? 'Sí' : 'No', r.passwordNeverExpires ? 'warning' : 'muted'),
+              },
+              {
+                key: 'enabled',
+                label: 'Estado',
+                render: (r) => badgeHtml(r.enabled ? 'Activo' : 'Inactivo', r.enabled ? 'success' : 'secondary'),
+              },
+            ]}
+            rows={filteredUsers}
+            emptyMessage={
+              users.length === 0
+                ? 'No hay usuarios sincronizados todavía. Andá a "Configuración" y sincronizá.'
+                : 'Ningún usuario tiene la contraseña marcada como "nunca expira"'
+            }
+          />
+        </>
       )}
     </Layout>
   );

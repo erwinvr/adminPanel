@@ -156,6 +156,7 @@ export const adService = {
       locked_out: Boolean(u.lockoutTime),
       lockout_time: u.lockoutTime,
       privileged_groups: privilegedGroupsByDn.get(u.distinguishedName) ?? null,
+      password_never_expires: u.passwordNeverExpires,
     }));
 
     const computers = ldapComputers.map((c) => ({

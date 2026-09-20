@@ -22,6 +22,7 @@ import { AppError } from '../../errors/AppError.js';
 const SEARCH_ATTRIBUTES = ['sAMAccountName', 'displayName', 'cn', 'whenCreated', 'lastLogonTimestamp', 'pwdLastSet', 'userAccountControl', 'distinguishedName', 'lockoutTime'];
 const USER_FILTER = '(&(objectClass=user)(objectCategory=person))';
 const UAC_ACCOUNT_DISABLED = 0x2;
+const UAC_DONT_EXPIRE_PASSWORD = 0x10000;
 
 // Atributos de esquema BASE de Active Directory (estándar desde Windows
 // 2000, a diferencia de las configs de equipos de red que varían por
@@ -168,6 +169,7 @@ export function searchUsers({ host, port, useTls, bindDn, bindPassword, baseDn }
             passwordLastSetAt: filetimeToDate(attrValue(entry, 'pwdLastSet')),
             enabled: (uac & UAC_ACCOUNT_DISABLED) === 0,
             lockoutTime: filetimeToDate(attrValue(entry, 'lockoutTime')),
+            passwordNeverExpires: (uac & UAC_DONT_EXPIRE_PASSWORD) !== 0,
           });
         });
         res.on('error', (err) => finish(new LdapError('Error durante la búsqueda LDAP (revisá el base DN): ' + err.message)));
