@@ -64,4 +64,30 @@ export const adRepository = {
   markUnlocked(id) {
     return db('ad_users').where({ id }).update({ locked_out: false, lockout_time: null });
   },
+
+  // Mismo criterio que replaceSyncedUsers — foto completa reemplazada
+  // en cada sync, no un espejo incremental.
+  async replaceSyncedComputers(computers) {
+    await db.transaction(async (trx) => {
+      await trx('ad_computers').del();
+      if (computers.length) await trx('ad_computers').insert(computers);
+    });
+  },
+
+  listComputers() {
+    return db('ad_computers')
+      .select(
+        'id',
+        'distinguished_name as distinguishedName',
+        'name',
+        'dns_host_name as dnsHostName',
+        'operating_system as operatingSystem',
+        'operating_system_version as operatingSystemVersion',
+        'ad_created_at as createdAt',
+        'last_login_at as lastLoginAt',
+        'enabled',
+        'synced_at as syncedAt'
+      )
+      .orderBy('name');
+  },
 };

@@ -20,6 +20,11 @@ export async function listUsers(req, res) {
   res.status(200).json({ success: true, data: users });
 }
 
+export async function listComputers(req, res) {
+  const computers = await adService.listComputers();
+  res.status(200).json({ success: true, data: computers });
+}
+
 export async function listLockedUsers(req, res) {
   const users = await adService.listLockedUsers();
   res.status(200).json({ success: true, data: users });

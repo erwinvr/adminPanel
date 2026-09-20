@@ -23,6 +23,13 @@ const SEARCH_ATTRIBUTES = ['sAMAccountName', 'displayName', 'cn', 'whenCreated',
 const USER_FILTER = '(&(objectClass=user)(objectCategory=person))';
 const UAC_ACCOUNT_DISABLED = 0x2;
 
+// Atributos de esquema BASE de Active Directory (estándar desde Windows
+// 2000, a diferencia de las configs de equipos de red que varían por
+// fabricante) — el bit de deshabilitado en userAccountControl aplica
+// igual a objetos computer que a objetos user.
+const COMPUTER_SEARCH_ATTRIBUTES = ['name', 'dNSHostName', 'operatingSystem', 'operatingSystemVersion', 'whenCreated', 'lastLogonTimestamp', 'userAccountControl', 'distinguishedName'];
+const COMPUTER_FILTER = '(objectCategory=computer)';
+
 export class LdapError extends AppError {
   constructor(message) {
     super(message, 502, 'AD_SYNC_FAILED');
@@ -126,6 +133,70 @@ export function searchUsers({ host, port, useTls, bindDn, bindPassword, baseDn }
         res.on('error', (err) => finish(new LdapError('Error durante la búsqueda LDAP (revisá el base DN): ' + err.message)));
         res.on('end', () => finish(null, users));
       });
+    });
+  });
+}
+
+/**
+ * Bindea con la cuenta de servicio (la misma que `searchUsers`) y
+ * busca todos los objetos `computer` bajo `baseDn` — "Equipos del AD".
+ * Misma conexión/manejo de errores que `searchUsers`, filtro y
+ * atributos distintos.
+ *
+ * @param {{ host: string, port: number, useTls: boolean, bindDn: string, bindPassword: string, baseDn: string }} params
+ */
+export function searchComputers({ host, port, useTls, bindDn, bindPassword, baseDn }) {
+  return new Promise((resolve, reject) => {
+    const protocol = useTls ? 'ldaps' : 'ldap';
+    const client = ldap.createClient({ url: `${protocol}://${host}:${port}`, connectTimeout: 8000, timeout: 15000 });
+
+    let settled = false;
+    const finish = (err, result) => {
+      if (settled) return;
+      settled = true;
+      client.unbind(() => {});
+      if (err) reject(err);
+      else resolve(result);
+    };
+
+    client.on('error', (err) => {
+      const detail = NETWORK_ERROR_CODES.has(err.code) ? 'revisá el host y el puerto. ' : '';
+      finish(new LdapError(`No se pudo conectar al servidor LDAP — ${detail}${err.message}`));
+    });
+
+    client.bind(bindDn, bindPassword, (bindErr) => {
+      if (bindErr) {
+        finish(new LdapError(describeBindError(bindErr)));
+        return;
+      }
+
+      const computers = [];
+      client.search(
+        baseDn,
+        { scope: 'sub', filter: COMPUTER_FILTER, attributes: COMPUTER_SEARCH_ATTRIBUTES, paged: true },
+        (searchErr, res) => {
+          if (searchErr) {
+            finish(new LdapError('No se pudo iniciar la búsqueda LDAP: ' + searchErr.message));
+            return;
+          }
+
+          res.on('searchEntry', (entry) => {
+            const uac = Number(attrValue(entry, 'userAccountControl') ?? 0);
+            computers.push({
+              distinguishedName: attrValue(entry, 'distinguishedName') ?? entry.objectName,
+              name: attrValue(entry, 'name'),
+              dnsHostName: attrValue(entry, 'dNSHostName'),
+              operatingSystem: attrValue(entry, 'operatingSystem'),
+              operatingSystemVersion: attrValue(entry, 'operatingSystemVersion'),
+              createdAt: generalizedTimeToDate(attrValue(entry, 'whenCreated')),
+              lastLoginAt: filetimeToDate(attrValue(entry, 'lastLogonTimestamp')),
+              enabled: (uac & UAC_ACCOUNT_DISABLED) === 0,
+            });
+          });
+          res.on('error', (err) => finish(new LdapError('Error durante la búsqueda LDAP (revisá el base DN): ' + err.message)));
+          res.on('end', () => finish(null, computers));
+        }
+      );
     });
   });
 }

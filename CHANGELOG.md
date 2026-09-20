@@ -10,6 +10,13 @@ esas, ver `git log`.
 
 ### Agregado
 
+- **Active Directory → Equipos del AD**: página nueva que sincroniza y
+  muestra los objetos "computer" del dominio (nombre, nombre DNS,
+  sistema operativo, último login, estado), con filtro por sistema
+  operativo armado dinámicamente a partir de los valores presentes en
+  los datos sincronizados. La sincronización de equipos corre en la
+  misma corrida que la de usuarios (mismo botón "Sincronizar
+  ahora"/"Actualizar ahora").
 - `docs/deployment.md`: manual paso a paso de despliegue en
   desarrollo y producción on-prem (variables de entorno, arquitectura
   de servicios, actualización de una instalación existente,

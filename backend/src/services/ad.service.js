@@ -12,7 +12,7 @@
 
 import { adRepository } from '../repositories/ad.repository.js';
 import { encryptSecret, decryptSecret } from '../utils/crypto.js';
-import { searchUsers, unlockUser as ldapUnlockUser } from '../integrations/activeDirectory/ldapClient.js';
+import { searchUsers, searchComputers, unlockUser as ldapUnlockUser } from '../integrations/activeDirectory/ldapClient.js';
 import { recordEvent } from '../audit/audit.service.js';
 import { NotFoundError, ValidationError } from '../errors/AppError.js';
 
@@ -93,15 +93,30 @@ export const adService = {
     const bindPassword = decryptSecret(settingsRow.bind_password_encrypted);
 
     let ldapUsers;
+    let ldapComputers;
     try {
-      ldapUsers = await searchUsers({
-        host: settingsRow.host,
-        port: settingsRow.port,
-        useTls: settingsRow.use_tls,
-        bindDn: settingsRow.bind_dn,
-        bindPassword,
-        baseDn: settingsRow.base_dn,
-      });
+      // Dos búsquedas independientes (cada una con su propio bind) contra
+      // el mismo AD — si cualquiera falla, se trata todo el sync como
+      // fallido en vez de guardar una foto parcial (usuarios sin equipos
+      // o viceversa).
+      [ldapUsers, ldapComputers] = await Promise.all([
+        searchUsers({
+          host: settingsRow.host,
+          port: settingsRow.port,
+          useTls: settingsRow.use_tls,
+          bindDn: settingsRow.bind_dn,
+          bindPassword,
+          baseDn: settingsRow.base_dn,
+        }),
+        searchComputers({
+          host: settingsRow.host,
+          port: settingsRow.port,
+          useTls: settingsRow.use_tls,
+          bindDn: settingsRow.bind_dn,
+          bindPassword,
+          baseDn: settingsRow.base_dn,
+        }),
+      ]);
     } catch (err) {
       await recordEvent({
         userId: actorId,
@@ -127,7 +142,18 @@ export const adService = {
       lockout_time: u.lockoutTime,
     }));
 
-    await adRepository.replaceSyncedUsers(users);
+    const computers = ldapComputers.map((c) => ({
+      distinguished_name: c.distinguishedName,
+      name: c.name,
+      dns_host_name: c.dnsHostName,
+      operating_system: c.operatingSystem,
+      operating_system_version: c.operatingSystemVersion,
+      ad_created_at: c.createdAt,
+      last_login_at: c.lastLoginAt,
+      enabled: c.enabled,
+    }));
+
+    await Promise.all([adRepository.replaceSyncedUsers(users), adRepository.replaceSyncedComputers(computers)]);
     const syncedAt = new Date();
     await adRepository.upsertSettings({ last_synced_at: syncedAt });
 
@@ -138,14 +164,18 @@ export const adService = {
       resourceId: settingsRow.id,
       result: 'success',
       req,
-      metadata: { usersCount: users.length, trigger },
+      metadata: { usersCount: users.length, computersCount: computers.length, trigger },
     });
 
-    return { usersCount: users.length, syncedAt: syncedAt.toISOString() };
+    return { usersCount: users.length, computersCount: computers.length, syncedAt: syncedAt.toISOString() };
   },
 
   listUsers() {
     return adRepository.listUsers();
+  },
+
+  listComputers() {
+    return adRepository.listComputers();
   },
 
   listLockedUsers() {

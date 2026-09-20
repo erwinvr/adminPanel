@@ -107,7 +107,7 @@ export const PERMISSION_DEFINITIONS = [
   },
   { code: PERMISSIONS.VAULT_EDIT, module: 'vault', description: 'Crear, editar y eliminar credenciales de la bóveda' },
 
-  { code: PERMISSIONS.AD_VIEW, module: 'ad', description: 'Ver los usuarios sincronizados desde Active Directory' },
+  { code: PERMISSIONS.AD_VIEW, module: 'ad', description: 'Ver los usuarios y equipos sincronizados desde Active Directory' },
   { code: PERMISSIONS.AD_EDIT, module: 'ad', description: 'Configurar la conexión a Active Directory y disparar la sincronización' },
 
   {
