@@ -75,7 +75,24 @@ dsacls "OU=Usuarios,DC=miempresa,DC=local" | findstr /I "lockoutTime"
 Debería listar una entrada `Allow` para la cuenta de servicio con
 `WRITE PROPERTY` sobre `lockoutTime`.
 
-## 3. Qué pasa si falta este permiso
+## 3. "Administradores del AD" — no requiere ningún permiso adicional
+
+Esta página lista a los usuarios que pertenecen a algún grupo
+incorporado de privilegio de administrador (**Domain Admins**,
+**Enterprise Admins**, **Schema Admins**, **Administrators**),
+incluyendo a los que lo obtienen por estar en un grupo anidado dentro
+de uno de esos — se resuelve con una búsqueda LDAP de pertenencia
+transitiva (`LDAP_MATCHING_RULE_IN_CHAIN`), no expandiendo la
+jerarquía de grupos a mano.
+
+Es enteramente de **lectura** sobre objetos `group` y `user`, mismo
+alcance que ya tiene la cuenta de servicio para sincronizar (punto 1)
+— no hace falta delegar nada nuevo. "Enterprise Admins" y "Schema
+Admins" solo existen en el dominio raíz del bosque: si `baseDn` apunta
+a otro dominio, esos dos grupos simplemente no aportan resultados (no
+es un error).
+
+## 4. Qué pasa si falta este permiso
 
 "Operaciones" sigue funcionando para **ver** quién está bloqueado (eso
 solo necesita el permiso de lectura del punto 1, que ya existe). El

@@ -6,6 +6,7 @@ export const adService = {
   sync: () => httpClient.post('/ad/sync', {}),
   listUsers: () => httpClient.get('/ad/users'),
   listComputers: () => httpClient.get('/ad/computers'),
+  listAdministrators: () => httpClient.get('/ad/administrators'),
   listLockedUsers: () => httpClient.get('/ad/users/locked'),
   syncFromOperations: () => httpClient.post('/ad/users/sync', {}),
   unlockUser: (id) => httpClient.post(`/ad/users/${id}/unlock`, {}),

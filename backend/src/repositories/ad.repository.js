@@ -54,6 +54,20 @@ export const adRepository = {
       .orderBy('lockout_time', 'desc');
   },
 
+  listAdministrators() {
+    return db('ad_users')
+      .select(
+        'id',
+        'distinguished_name as distinguishedName',
+        'sam_account_name as samAccountName',
+        'display_name as displayName',
+        'enabled',
+        'privileged_groups as privilegedGroups'
+      )
+      .whereRaw('array_length(privileged_groups, 1) > 0')
+      .orderBy('display_name');
+  },
+
   findUserById(id) {
     return db('ad_users').where({ id }).first();
   },

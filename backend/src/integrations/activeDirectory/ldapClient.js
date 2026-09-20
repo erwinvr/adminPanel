@@ -30,6 +30,22 @@ const UAC_ACCOUNT_DISABLED = 0x2;
 const COMPUTER_SEARCH_ATTRIBUTES = ['name', 'dNSHostName', 'operatingSystem', 'operatingSystemVersion', 'whenCreated', 'lastLogonTimestamp', 'userAccountControl', 'distinguishedName'];
 const COMPUTER_FILTER = '(objectCategory=computer)';
 
+// Grupos incorporados de Active Directory que otorgan privilegios de
+// administrador. "Enterprise Admins" y "Schema Admins" solo existen en
+// el dominio raíz del bosque — buscarlos en cualquier otro dominio
+// devuelve 0 resultados, lo cual es un caso normal (no un error).
+// "Administrators" (Builtin) suele tener a "Domain Admins" anidado
+// adentro, así que un mismo usuario puede aparecer con varios grupos a
+// la vez — es correcto mostrarlo así: refleja el privilegio real que
+// da esa membresía anidada, no una casualidad de datos.
+const PRIVILEGED_GROUP_NAMES = ['Domain Admins', 'Enterprise Admins', 'Schema Admins', 'Administrators'];
+
+// Regla de coincidencia LDAP para "en cadena" (transitiva) de Microsoft
+// — permite resolver en una sola búsqueda a los miembros de un grupo
+// INCLUYENDO los que llegan por pertenencia a otro grupo anidado
+// adentro, sin tener que expandir la jerarquía de grupos a mano.
+const LDAP_MATCHING_RULE_IN_CHAIN = '1.2.840.113556.1.4.1941';
+
 export class LdapError extends AppError {
   constructor(message) {
     super(message, 502, 'AD_SYNC_FAILED');
@@ -75,6 +91,30 @@ function generalizedTimeToDate(value) {
 function attrValue(entry, name) {
   const attr = entry.attributes.find((a) => a.type.toLowerCase() === name.toLowerCase());
   return attr?.values?.[0] ?? null;
+}
+
+// RFC 4515: escapa los caracteres que un filtro LDAP interpreta como
+// sintaxis propia. Se usa tanto para el nombre del grupo (dato fijo,
+// pero se escapa igual por prolijidad) como para el DN ya resuelto que
+// se vuelve a interpolar en el filtro de pertenencia recursiva.
+function escapeFilterValue(value) {
+  return value.replace(/[\\*()\0]/g, (c) => `\\${c.charCodeAt(0).toString(16).padStart(2, '0')}`);
+}
+
+/** Una búsqueda LDAP puntual sobre un cliente ya bindeado — junta las entries y resuelve. */
+function searchOnce(client, baseDn, filter, attributes) {
+  return new Promise((resolve, reject) => {
+    const entries = [];
+    client.search(baseDn, { scope: 'sub', filter, attributes, paged: true }, (searchErr, res) => {
+      if (searchErr) {
+        reject(new LdapError('No se pudo iniciar la búsqueda LDAP: ' + searchErr.message));
+        return;
+      }
+      res.on('searchEntry', (entry) => entries.push(entry));
+      res.on('error', (err) => reject(new LdapError('Error durante la búsqueda LDAP (revisá el base DN): ' + err.message)));
+      res.on('end', () => resolve(entries));
+    });
+  });
 }
 
 /**
@@ -261,6 +301,104 @@ export function unlockUser({ host, port, useTls, bindDn, bindPassword, targetDn 
         }
         finish(null);
       });
+    });
+  });
+}
+
+/**
+ * Bindea con la cuenta de servicio (misma de siempre, solo lectura —
+ * no hace falta ningún permiso de AD adicional al de sincronizar) y
+ * resuelve, para cada grupo de PRIVILEGED_GROUP_NAMES: 1) su DN
+ * (buscando por `cn`, no hardcodeado — así sigue funcionando si algún
+ * día se movió el grupo a otra OU), y 2) sus miembros de forma
+ * RECURSIVA (`memberOf` con LDAP_MATCHING_RULE_IN_CHAIN), que incluye
+ * tanto a los agregados directamente como a los que llegan porque su
+ * grupo está anidado dentro del privilegiado. Un grupo que no existe
+ * en este dominio (ej. Schema Admins fuera del dominio raíz del
+ * bosque) simplemente no aporta miembros, sin error.
+ *
+ * Devuelve un array de `{ distinguishedName, samAccountName, displayName, groups: string[] }`
+ * — una fila por usuario único, con TODOS los grupos privilegiados a
+ * los que pertenece (puede ser más de uno, ver comentario en
+ * PRIVILEGED_GROUP_NAMES).
+ *
+ * @param {{ host: string, port: number, useTls: boolean, bindDn: string, bindPassword: string, baseDn: string }} params
+ */
+export function searchPrivilegedUsers({ host, port, useTls, bindDn, bindPassword, baseDn }) {
+  return new Promise((resolve, reject) => {
+    const protocol = useTls ? 'ldaps' : 'ldap';
+    const client = ldap.createClient({ url: `${protocol}://${host}:${port}`, connectTimeout: 8000, timeout: 15000 });
+
+    let settled = false;
+    const finish = (err, result) => {
+      if (settled) return;
+      settled = true;
+      client.unbind(() => {});
+      if (err) reject(err);
+      else resolve(result);
+    };
+
+    client.on('error', (err) => {
+      const detail = NETWORK_ERROR_CODES.has(err.code) ? 'revisá el host y el puerto. ' : '';
+      finish(new LdapError(`No se pudo conectar al servidor LDAP — ${detail}${err.message}`));
+    });
+
+    client.bind(bindDn, bindPassword, async (bindErr) => {
+      if (bindErr) {
+        finish(new LdapError(describeBindError(bindErr)));
+        return;
+      }
+
+      try {
+        // Los 4 grupos se resuelven EN PARALELO sobre la misma conexión
+        // (ldapjs multiplexa varias operaciones a la vez en un solo
+        // socket) — hacerlo secuencial (8 round-trips uno detrás del
+        // otro) tarda minutos contra un AD con latencia de red alta, muy
+        // por encima del timeout del proxy nginx (60s por defecto).
+        const perGroupResults = await Promise.all(
+          PRIVILEGED_GROUP_NAMES.map(async (groupName) => {
+            const groupEntries = await searchOnce(
+              client,
+              baseDn,
+              `(&(objectClass=group)(cn=${escapeFilterValue(groupName)}))`,
+              ['distinguishedName']
+            );
+            if (groupEntries.length === 0) return { groupName, memberEntries: [] }; // grupo inexistente en este dominio — normal para Enterprise/Schema Admins
+
+            const groupDn = attrValue(groupEntries[0], 'distinguishedName') ?? groupEntries[0].objectName;
+            const memberEntries = await searchOnce(
+              client,
+              baseDn,
+              `(&(objectCategory=person)(objectClass=user)(memberOf:${LDAP_MATCHING_RULE_IN_CHAIN}:=${escapeFilterValue(groupDn)}))`,
+              ['distinguishedName', 'sAMAccountName', 'displayName', 'cn']
+            );
+            return { groupName, memberEntries };
+          })
+        );
+
+        const usersByDn = new Map();
+        for (const { groupName, memberEntries } of perGroupResults) {
+          for (const entry of memberEntries) {
+            const dn = attrValue(entry, 'distinguishedName') ?? entry.objectName;
+            if (!usersByDn.has(dn)) {
+              usersByDn.set(dn, {
+                distinguishedName: dn,
+                samAccountName: attrValue(entry, 'sAMAccountName'),
+                displayName: attrValue(entry, 'displayName') ?? attrValue(entry, 'cn'),
+                groups: new Set(),
+              });
+            }
+            usersByDn.get(dn).groups.add(groupName);
+          }
+        }
+
+        finish(
+          null,
+          [...usersByDn.values()].map((u) => ({ ...u, groups: [...u.groups] }))
+        );
+      } catch (err) {
+        finish(err);
+      }
     });
   });
 }

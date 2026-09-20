@@ -38,6 +38,7 @@ import {
   History,
   GitCompare,
   Unlock,
+  Crown,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { toast } from 'sonner';
@@ -92,6 +93,7 @@ const MANAGEMENT_SECTIONS = [
       { path: '/ad/settings', label: 'Configuración', permission: PERMISSIONS.AD_EDIT, icon: Settings },
       { path: '/ad/users', label: 'Usuarios del AD', permission: PERMISSIONS.AD_VIEW, icon: Users },
       { path: '/ad/computers', label: 'Equipos del AD', permission: PERMISSIONS.AD_VIEW, icon: Server },
+      { path: '/ad/administrators', label: 'Administradores del AD', permission: PERMISSIONS.AD_VIEW, icon: Crown },
       { path: '/ad/operations', label: 'Operaciones', permission: PERMISSIONS.AD_OPERATIONS_VIEW, icon: Unlock },
     ],
   },

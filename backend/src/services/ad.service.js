@@ -12,7 +12,12 @@
 
 import { adRepository } from '../repositories/ad.repository.js';
 import { encryptSecret, decryptSecret } from '../utils/crypto.js';
-import { searchUsers, searchComputers, unlockUser as ldapUnlockUser } from '../integrations/activeDirectory/ldapClient.js';
+import {
+  searchUsers,
+  searchComputers,
+  searchPrivilegedUsers,
+  unlockUser as ldapUnlockUser,
+} from '../integrations/activeDirectory/ldapClient.js';
 import { recordEvent } from '../audit/audit.service.js';
 import { NotFoundError, ValidationError } from '../errors/AppError.js';
 
@@ -94,12 +99,12 @@ export const adService = {
 
     let ldapUsers;
     let ldapComputers;
+    let ldapPrivilegedUsers;
     try {
-      // Dos búsquedas independientes (cada una con su propio bind) contra
+      // Tres búsquedas independientes (cada una con su propio bind) contra
       // el mismo AD — si cualquiera falla, se trata todo el sync como
-      // fallido en vez de guardar una foto parcial (usuarios sin equipos
-      // o viceversa).
-      [ldapUsers, ldapComputers] = await Promise.all([
+      // fallido en vez de guardar una foto parcial.
+      [ldapUsers, ldapComputers, ldapPrivilegedUsers] = await Promise.all([
         searchUsers({
           host: settingsRow.host,
           port: settingsRow.port,
@@ -109,6 +114,14 @@ export const adService = {
           baseDn: settingsRow.base_dn,
         }),
         searchComputers({
+          host: settingsRow.host,
+          port: settingsRow.port,
+          useTls: settingsRow.use_tls,
+          bindDn: settingsRow.bind_dn,
+          bindPassword,
+          baseDn: settingsRow.base_dn,
+        }),
+        searchPrivilegedUsers({
           host: settingsRow.host,
           port: settingsRow.port,
           useTls: settingsRow.use_tls,
@@ -130,6 +143,8 @@ export const adService = {
       throw err;
     }
 
+    const privilegedGroupsByDn = new Map(ldapPrivilegedUsers.map((p) => [p.distinguishedName, p.groups]));
+
     const users = ldapUsers.map((u) => ({
       distinguished_name: u.distinguishedName,
       sam_account_name: u.samAccountName,
@@ -140,6 +155,7 @@ export const adService = {
       enabled: u.enabled,
       locked_out: Boolean(u.lockoutTime),
       lockout_time: u.lockoutTime,
+      privileged_groups: privilegedGroupsByDn.get(u.distinguishedName) ?? null,
     }));
 
     const computers = ldapComputers.map((c) => ({
@@ -180,6 +196,10 @@ export const adService = {
 
   listLockedUsers() {
     return adRepository.listLockedUsers();
+  },
+
+  listAdministrators() {
+    return adRepository.listAdministrators();
   },
 
   // Desbloquea contra el AD real (LDAP MODIFY, ver ldapClient.js) usando

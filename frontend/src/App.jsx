@@ -28,6 +28,7 @@ import { VaultPage } from './pages/VaultPage.jsx';
 import { ADSettingsPage } from './pages/ADSettingsPage.jsx';
 import { ADUsersPage } from './pages/ADUsersPage.jsx';
 import { ADComputersPage } from './pages/ADComputersPage.jsx';
+import { ADAdministratorsPage } from './pages/ADAdministratorsPage.jsx';
 import { ADOperationsPage } from './pages/ADOperationsPage.jsx';
 import { UsersInsightsPage } from './pages/UsersInsightsPage.jsx';
 import { M365SettingsPage } from './pages/M365SettingsPage.jsx';
@@ -213,6 +214,14 @@ export function App() {
         element={
           <ProtectedRoute permission={PERMISSIONS.AD_VIEW}>
             <ADComputersPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/ad/administrators"
+        element={
+          <ProtectedRoute permission={PERMISSIONS.AD_VIEW}>
+            <ADAdministratorsPage />
           </ProtectedRoute>
         }
       />

@@ -10,6 +10,15 @@ esas, ver `git log`.
 
 ### Agregado
 
+- **Active Directory → Administradores del AD**: página nueva que
+  lista los usuarios con al menos un privilegio de administrador
+  (Domain Admins, Enterprise Admins, Schema Admins o Administrators),
+  incluyendo a los que lo obtienen por pertenecer a un grupo anidado
+  dentro de uno de esos (búsqueda LDAP de pertenencia transitiva,
+  `LDAP_MATCHING_RULE_IN_CHAIN` — no solo miembros directos). Con
+  filtro por grupo armado dinámicamente a partir de los datos
+  sincronizados. Es de solo lectura y no requiere delegar ningún
+  permiso nuevo de AD (mismo alcance de lectura que ya usa el sync).
 - **Active Directory → Equipos del AD**: página nueva que sincroniza y
   muestra los objetos "computer" del dominio (nombre, nombre DNS,
   sistema operativo, último login, estado), con filtro por sistema

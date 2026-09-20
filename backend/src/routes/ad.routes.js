@@ -26,6 +26,8 @@ router.get('/users', requirePermission(PERMISSIONS.AD_VIEW), asyncHandler(adCont
 
 router.get('/computers', requirePermission(PERMISSIONS.AD_VIEW), asyncHandler(adController.listComputers));
 
+router.get('/administrators', requirePermission(PERMISSIONS.AD_VIEW), asyncHandler(adController.listAdministrators));
+
 // Ruta fija ANTES de "/users/:id/unlock" — no hay ambigüedad real de
 // path acá (GET vs POST, y "locked" nunca matchea como :id de un POST),
 // pero se mantiene el mismo criterio que netbackup.routes.js por las dudas.
