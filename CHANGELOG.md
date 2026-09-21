@@ -10,6 +10,10 @@ esas, ver `git log`.
 
 ### Agregado
 
+- **Veeam → Configuración**: frecuencia de **sincronización automática
+  en segundo plano** (manual / 15 min / 30 min / cada hora / 6 / 12 /
+  24 h), igual que Active Directory y Microsoft 365. Las corridas
+  automáticas se auditan sin usuario y con `trigger: scheduled`.
 - **Active Directory → Usuarios del AD**: filtro "Solo contraseña que
   nunca expira" y columna nueva mostrando ese estado — calculado del
   bit `ADS_UF_DONT_EXPIRE_PASSWD` (0x10000) de `userAccountControl`
@@ -52,12 +56,28 @@ esas, ver `git log`.
 
 ### Corregido
 
+- **Veeam → Configuración**: la sincronización nunca conectaba contra
+  un Veeam real. Tres causas: (1) Veeam publica su REST API (9419) con
+  un certificado autofirmado que Node rechazaba
+  (`DEPTH_ZERO_SELF_SIGNED_CERT`) y el mensaje solo decía "fetch
+  failed" — se agrega la opción **"Verificar certificado TLS"**
+  (`verify_tls`, activada por defecto) y errores con el motivo real
+  (certificado, conexión rechazada, timeout, DNS); (2) el request a
+  `/api/oauth2/token` ahora envía `Content-Length` explícito (con
+  `Transfer-Encoding: chunked` el servidor de Veeam no responde);
+  (3) el espacio libre del repositorio se guardaba vacío porque Veeam
+  lo informa como `freeGB`.
 - README: tabla de variables de entorno no incluía
   `M365_ENCRYPTION_KEY` (obligatoria); sección de Docker no mencionaba
   el servicio `netbackup-agent`.
 
 ### Cambiado
 
+- El scheduler de sincronizaciones automáticas (AD, Microsoft 365,
+  Veeam) ya no reintenta cada minuto cuando una corrida falla: una
+  falla no actualizaba `last_synced_at`, así que se reintentaba en cada
+  tick y dejaba un evento de fallo por minuto en `audit_logs`
+  (inmutable). Ahora espera el intervalo configurado entre intentos.
 - La página de Auditoría ya no muestra eventos de Backup Networking
   (`netbackup.*` — dispositivos, corridas, reglas de compliance); esa
   sección queda solo para eventos de seguridad. La tabla `audit_logs`

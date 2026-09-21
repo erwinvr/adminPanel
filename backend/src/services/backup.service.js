@@ -2,9 +2,12 @@
  * services/backup.service.js
  *
  * Sincronización con Veeam Backup & Replication (ver
- * integrations/veeam/veeamClient.js). `sync()` es on-demand, mismo
- * criterio que Active Directory/Microsoft 365 — sin job automático
- * programado.
+ * integrations/veeam/veeamClient.js). `sync()` se dispara de dos
+ * formas: manual (botón "Sincronizar ahora", con `req` real de la
+ * sesión) o automática (jobs/syncScheduler.js, con `req = null` — sin
+ * usuario, se audita con userId null). La frecuencia del job
+ * automático es `sync_interval_minutes` en backup_settings (0/null =
+ * desactivado), igual que Active Directory/Microsoft 365.
  */
 
 import { backupRepository } from '../repositories/backup.repository.js';
@@ -14,13 +17,15 @@ import { recordEvent } from '../audit/audit.service.js';
 import { ValidationError } from '../errors/AppError.js';
 
 function toPublicSettings(row) {
-  if (!row) return { baseUrl: null, username: null, hasPassword: false, passwordPreview: null, lastSyncedAt: null };
+  if (!row) return { baseUrl: null, username: null, verifyTls: true, hasPassword: false, passwordPreview: null, lastSyncedAt: null, syncIntervalMinutes: null };
   return {
     baseUrl: row.base_url,
     username: row.username,
+    verifyTls: row.verify_tls,
     hasPassword: Boolean(row.password_encrypted),
     passwordPreview: row.password_preview,
     lastSyncedAt: row.last_synced_at,
+    syncIntervalMinutes: row.sync_interval_minutes,
   };
 }
 
@@ -38,7 +43,7 @@ function normalizeJobState(raw) {
 
 function normalizeRepositoryState(raw) {
   const capacityBytes = raw.capacityBytes ?? (raw.capacityGB != null ? Math.round(raw.capacityGB * 1024 ** 3) : null);
-  const freeBytes = raw.freeSpaceBytes ?? raw.freeBytes ?? (raw.freeSpaceGB != null ? Math.round(raw.freeSpaceGB * 1024 ** 3) : null);
+  const freeBytes = raw.freeSpaceBytes ?? raw.freeBytes ?? ((raw.freeSpaceGB ?? raw.freeGB) != null ? Math.round((raw.freeSpaceGB ?? raw.freeGB) * 1024 ** 3) : null);
   return {
     veeam_repository_id: String(raw.id ?? raw.repositoryId ?? raw.name),
     name: raw.name ?? raw.repositoryName ?? 'Repositorio sin nombre',
@@ -52,9 +57,9 @@ export const backupService = {
     return toPublicSettings(await backupRepository.getSettings());
   },
 
-  async saveSettings(req, { baseUrl, username, password }) {
+  async saveSettings(req, { baseUrl, username, verifyTls, syncIntervalMinutes, password }) {
     const actorId = req.session.userId;
-    const changes = { base_url: baseUrl, username, updated_by: actorId, updated_at: new Date() };
+    const changes = { base_url: baseUrl, username, verify_tls: verifyTls, sync_interval_minutes: syncIntervalMinutes || null, updated_by: actorId, updated_at: new Date() };
     if (password) {
       changes.password_encrypted = encryptSecret(password);
       changes.password_preview = password.slice(-4);
@@ -69,28 +74,31 @@ export const backupService = {
       resourceId: row.id,
       result: 'success',
       req,
-      metadata: { baseUrl, username, passwordUpdated: Boolean(password) },
+      metadata: { baseUrl, username, verifyTls, syncIntervalMinutes: changes.sync_interval_minutes, passwordUpdated: Boolean(password) },
     });
 
     return toPublicSettings(row);
   },
 
-  async sync(req) {
+  // `req` es null cuando lo dispara el job automático (jobs/syncScheduler.js).
+  async sync(req = null) {
     const settingsRow = await backupRepository.getSettings();
     if (!settingsRow?.base_url || !settingsRow?.username || !settingsRow?.password_encrypted) {
       throw new ValidationError('Configurá la URL del servidor, el usuario y la contraseña antes de sincronizar');
     }
 
-    const actorId = req.session.userId;
+    const actorId = req?.session?.userId ?? null;
+    const trigger = req ? 'manual' : 'scheduled';
     const password = decryptSecret(settingsRow.password_encrypted);
 
     let jobStates;
     let repoStates;
     try {
-      const accessToken = await getAccessToken({ baseUrl: settingsRow.base_url, username: settingsRow.username, password });
+      const verifyTls = settingsRow.verify_tls;
+      const accessToken = await getAccessToken({ baseUrl: settingsRow.base_url, username: settingsRow.username, password, verifyTls });
       [jobStates, repoStates] = await Promise.all([
-        fetchJobStates(accessToken, settingsRow.base_url),
-        fetchRepositoryStates(accessToken, settingsRow.base_url),
+        fetchJobStates(accessToken, settingsRow.base_url, verifyTls),
+        fetchRepositoryStates(accessToken, settingsRow.base_url, verifyTls),
       ]);
     } catch (err) {
       await recordEvent({
@@ -100,7 +108,7 @@ export const backupService = {
         resourceId: settingsRow.id,
         result: 'failure',
         req,
-        metadata: { error: err.message },
+        metadata: { error: err.message, trigger },
       });
       throw err;
     }
@@ -120,7 +128,7 @@ export const backupService = {
       resourceId: settingsRow.id,
       result: 'success',
       req,
-      metadata: { jobsCount: jobs.length, repositoriesCount: repositories.length },
+      metadata: { jobsCount: jobs.length, repositoriesCount: repositories.length, trigger },
     });
 
     return { jobsCount: jobs.length, repositoriesCount: repositories.length, syncedAt: syncedAt.toISOString() };
