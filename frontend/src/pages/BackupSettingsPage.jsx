@@ -49,7 +49,11 @@ export function BackupSettingsPage() {
     try {
       const result = await backupService.sync();
       setSyncResult({ ok: true, ...result });
-      toast.success(`Sincronizado: ${result.jobsCount} jobs, ${result.repositoriesCount} repositorios`);
+      if (result.jobWarnings?.length) {
+        toast.warning(`Sincronizado con advertencias: ${result.jobWarnings.length} tipo(s) de job no se pudieron leer`);
+      } else {
+        toast.success(`Sincronizado: ${result.jobsCount} jobs, ${result.repositoriesCount} repositorios`);
+      }
       refresh();
     } catch (err) {
       setSyncResult({ ok: false, message: err.message });
@@ -131,11 +135,27 @@ export function BackupSettingsPage() {
           )}
 
           {syncResult && (
-            <Alert className="mt-4" variant={syncResult.ok ? 'success' : 'destructive'}>
+            <Alert
+              className="mt-4"
+              variant={syncResult.ok ? (syncResult.jobWarnings?.length ? 'warning' : 'success') : 'destructive'}
+            >
               <AlertDescription>
                 {syncResult.ok
                   ? `Sincronización exitosa: ${syncResult.jobsCount} jobs y ${syncResult.repositoriesCount} repositorios traídos desde Veeam.`
                   : `Falló la sincronización: ${syncResult.message}`}
+                {syncResult.ok && syncResult.jobWarnings?.length > 0 && (
+                  <>
+                    <p className="mt-2 font-medium">
+                      No se pudo leer el estado de {syncResult.jobWarnings.length} tipo(s) de job (el resto sincronizó
+                      bien):
+                    </p>
+                    <ul className="mt-1 list-disc pl-5">
+                      {syncResult.jobWarnings.map((w) => (
+                        <li key={w}>{w}</li>
+                      ))}
+                    </ul>
+                  </>
+                )}
               </AlertDescription>
             </Alert>
           )}

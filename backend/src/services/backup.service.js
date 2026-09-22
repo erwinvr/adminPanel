@@ -92,14 +92,18 @@ export const backupService = {
     const password = decryptSecret(settingsRow.password_encrypted);
 
     let jobStates;
+    let jobWarnings;
     let repoStates;
     try {
       const verifyTls = settingsRow.verify_tls;
       const accessToken = await getAccessToken({ baseUrl: settingsRow.base_url, username: settingsRow.username, password, verifyTls });
-      [jobStates, repoStates] = await Promise.all([
+      let jobsResult;
+      [jobsResult, repoStates] = await Promise.all([
         fetchJobStates(accessToken, settingsRow.base_url, verifyTls),
         fetchRepositoryStates(accessToken, settingsRow.base_url, verifyTls),
       ]);
+      jobStates = jobsResult.jobs;
+      jobWarnings = jobsResult.warnings;
     } catch (err) {
       await recordEvent({
         userId: actorId,
@@ -128,10 +132,15 @@ export const backupService = {
       resourceId: settingsRow.id,
       result: 'success',
       req,
-      metadata: { jobsCount: jobs.length, repositoriesCount: repositories.length, trigger },
+      metadata: { jobsCount: jobs.length, repositoriesCount: repositories.length, trigger, jobWarnings },
     });
 
-    return { jobsCount: jobs.length, repositoriesCount: repositories.length, syncedAt: syncedAt.toISOString() };
+    return {
+      jobsCount: jobs.length,
+      repositoriesCount: repositories.length,
+      syncedAt: syncedAt.toISOString(),
+      jobWarnings,
+    };
   },
 
   async getDashboard() {

@@ -8,6 +8,24 @@ esas, ver `git log`.
 
 ## [Unreleased]
 
+### Corregido
+
+- **Veeam → Configuración**: con muchos jobs en producción, la
+  sincronización fallaba con "Veeam respondió con un error: HTTP 500"
+  sin más detalle. Causa real (confirmada contra la spec OpenAPI del
+  propio Veeam): la versión de la API que usa la app (1.2-rev0, que el
+  propio Veeam marca como *deprecated*) solo sabe serializar 6 tipos de
+  job; si el entorno tiene UN SOLO job de un tipo que no reconoce
+  (Tape, Agent, SureBackup, CDP, Backup Copy de VM, etc. — ausentes en
+  un ambiente de prueba chico), el endpoint "todos los jobs" devuelve
+  error 500 y se pierde el lote completo, jobs conocidos incluidos.
+  Ahora se piden los jobs **un tipo a la vez** (`typeFilter`) — un tipo
+  no reconocido queda afuera de ese request puntual sin afectar a los
+  demás, y si algún tipo puntual falla por otro motivo, la
+  sincronización sigue con el resto y muestra qué tipo falló y por qué
+  (mensaje, código de error y recurso de Veeam) en vez de abortar todo
+  sin información.
+
 ### Agregado
 
 - **Veeam → Configuración**: frecuencia de **sincronización automática
