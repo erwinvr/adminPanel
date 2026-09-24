@@ -41,6 +41,15 @@ esas, ver `git log`.
 
 ### Agregado
 
+- **Microsoft 365 → Usuarios sincronizados**: buscador por nombre, email
+  o licencia (sin distinguir mayúsculas ni tildes; varios términos =
+  todos deben coincidir), con contador de resultados. La columna
+  "Licencias asignadas" ahora muestra el **nombre comercial** de la
+  licencia en vez del código SKU (ej. "Office 365 E1" en vez de
+  `STANDARDPACK`), sin repetir nombres. Se completó la tabla de nombres
+  con los 19 SKU restantes del tenant, tomados de la lista oficial de
+  Microsoft; la búsqueda del nombre ya no distingue mayúsculas (Graph
+  manda `Win10_VDA_E3`, Microsoft publica `WIN10_VDA_E3`).
 - **Microsoft 365 → filtro de dominios**: en la configuración se indican
   los dominios (del userPrincipalName) a admitir en la sincronización; el
   resto de los usuarios se ignora (vacío = todos, como antes). Se aplica

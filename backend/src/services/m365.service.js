@@ -210,7 +210,11 @@ export const m365Service = {
     }));
   },
 
-  listUsers() {
-    return m365Repository.listUsersWithLicenses();
+  // Las licencias de cada usuario se devuelven con su nombre comercial
+  // (ver skuNames.js), no con el SKU — quedan sin repetir aunque dos SKU
+  // distintos compartan nombre (ej. VISIOCLIENT y VISIO_PLAN2_DEPT).
+  async listUsers() {
+    const users = await m365Repository.listUsersWithLicenses();
+    return users.map((u) => ({ ...u, licenses: [...new Set(u.licenses.map(friendlySkuName))].sort((a, b) => a.localeCompare(b)) }));
   },
 };
