@@ -7,12 +7,20 @@ import { Input } from '@/components/ui/input.jsx';
 import { Alert, AlertDescription } from '@/components/ui/alert.jsx';
 import { badgeHtml } from '@/lib/badgeHtml.js';
 
+// Ejemplo de acción para el placeholder del filtro de cada módulo.
+const EXAMPLE_ACTION = { m365: 'm365.sync', ad: 'ad.user_unlock', veeam: 'backup.sync', vuln: 'vuln.sync', pam360: 'pam360.sync' };
+
 function resultBadge(result) {
   return badgeHtml(result, result === 'success' ? 'success' : 'destructive');
 }
 
-export function AuditPage() {
-  const [state, setState] = useState({ page: 1, pageSize: 20, action: undefined });
+/**
+ * Registro de auditoría de UN módulo (`module`: application, m365, ad,
+ * veeam, vuln, pam360 — ver backend/src/audit/auditModules.js). Cada
+ * ruta de Auditoría renderiza esta misma página con su módulo y título.
+ */
+export function AuditPage({ module = 'application', title = 'Aplicación' }) {
+  const [state, setState] = useState({ page: 1, pageSize: 20, module, action: undefined });
   const [logs, setLogs] = useState([]);
   const [meta, setMeta] = useState(null);
   const [error, setError] = useState(null);
@@ -46,11 +54,11 @@ export function AuditPage() {
 
   return (
     <Layout>
-      <h1 className="text-2xl font-semibold">Registro de auditoría</h1>
+      <h1 className="text-2xl font-semibold">Auditoría — {title}</h1>
       <div className="my-4">
         <Input
           type="text"
-          placeholder="Filtrar por acción (ej. user.create)"
+          placeholder={`Filtrar por acción (ej. ${module === 'application' ? 'user.create' : `${EXAMPLE_ACTION[module]}`})`}
           onChange={(e) => onActionFilterChange(e.target.value)}
           className="max-w-xs"
         />
@@ -74,7 +82,7 @@ export function AuditPage() {
               { key: 'ip_address', label: 'IP' },
             ]}
             rows={logs}
-            emptyMessage="No hay eventos de auditoría con estos filtros"
+            emptyMessage="No hay eventos de auditoría de este módulo con estos filtros"
             paginated={false}
           />
           {meta && (

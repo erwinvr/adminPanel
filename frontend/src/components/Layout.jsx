@@ -148,7 +148,14 @@ const MANAGEMENT_SECTIONS = [
     key: 'audit',
     label: 'Auditoría',
     icon: ScrollText,
-    items: [{ path: '/audit', label: 'Auditoría', permission: PERMISSIONS.AUDIT_VIEW, icon: ScrollText }],
+    items: [
+      { path: '/audit', label: 'Aplicación', permission: PERMISSIONS.AUDIT_VIEW, icon: ScrollText },
+      { path: '/audit/m365', label: 'Microsoft 365', permission: PERMISSIONS.AUDIT_VIEW, icon: ScrollText },
+      { path: '/audit/ad', label: 'Active Directory', permission: PERMISSIONS.AUDIT_VIEW, icon: ScrollText },
+      { path: '/audit/veeam', label: 'Veeam', permission: PERMISSIONS.AUDIT_VIEW, icon: ScrollText },
+      { path: '/audit/vuln', label: 'Vulnerabilidades', permission: PERMISSIONS.AUDIT_VIEW, icon: ScrollText },
+      { path: '/audit/pam360', label: 'PAM360', permission: PERMISSIONS.AUDIT_VIEW, icon: ScrollText },
+    ],
   },
 ];
 

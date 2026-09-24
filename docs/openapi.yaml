@@ -575,6 +575,16 @@ paths:
           name: userId
           schema: { type: string, format: uuid }
         - in: query
+          name: module
+          description: >
+            Módulo cuyos eventos se listan, por prefijo de acción. `application`
+            (por defecto) es todo lo que no pertenece a una integración; los
+            eventos de Backup Networking (`netbackup.*`) no se listan en ningún módulo.
+          schema:
+            type: string
+            enum: [application, m365, ad, veeam, vuln, pam360]
+            default: application
+        - in: query
           name: action
           schema: { type: string }
         - in: query

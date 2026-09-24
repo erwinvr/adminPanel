@@ -115,6 +115,16 @@ esas, ver `git log`.
 
 ### Cambiado
 
+- **Auditoría dividida por módulo**: la página "Auditoría" pasa a
+  llamarse **Aplicación** y muestra solo los eventos de la aplicación
+  (usuarios, roles, sesiones, ABM, etc.); se agregan páginas
+  independientes para **Microsoft 365**, **Active Directory**,
+  **Veeam**, **Vulnerabilidades** y **PAM360**, cada una con solo sus
+  eventos y el mismo filtro y paginación. El endpoint
+  `GET /audit-logs` acepta un parámetro `module` (por defecto
+  `application`); el reparto se hace por prefijo de acción
+  (`backend/src/audit/auditModules.js`). Backup Networking sigue sin
+  listarse. Mismo permiso `audit.view` para todas.
 - El scheduler de sincronizaciones automáticas (AD, Microsoft 365,
   Veeam) ya no reintenta cada minuto cuando una corrida falla: una
   falla no actualizaba `last_synced_at`, así que se reintentaba en cada

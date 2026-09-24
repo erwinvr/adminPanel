@@ -1,4 +1,5 @@
 import { db } from '../config/database.js';
+import { AUDIT_MODULES, INTEGRATION_PREFIXES, EXCLUDED_EVERYWHERE } from '../audit/auditModules.js';
 
 export const auditRepository = {
   /**
@@ -10,7 +11,7 @@ export const auditRepository = {
     return trx('audit_logs').insert(entry);
   },
 
-  async list({ page, pageSize, userId, action, resource, from, to }) {
+  async list({ page, pageSize, userId, module = 'application', action, resource, from, to }) {
     const query = db('audit_logs as a')
       .leftJoin('users as u', 'u.id', 'a.user_id')
       .select(
@@ -24,17 +25,21 @@ export const auditRepository = {
         'a.ip_address',
         'a.result',
         'a.metadata'
-      )
-      // La página de Auditoría es solo para eventos de SEGURIDAD — las
-      // corridas/ABM de Backup Networking (dispositivos, reglas de
-      // compliance) ya tienen su propia vista dedicada (Historial,
-      // Bitácora, Compliance) y no deben mezclarse acá. `audit_logs` es
-      // inmutable por diseño (trigger de PostgreSQL que rechaza
-      // UPDATE/DELETE — ver migración 20260101000500), así que los
-      // eventos "netbackup.*" ya guardados no se pueden borrar de la
-      // tabla; se excluyen acá, en la consulta que alimenta esta página,
-      // no en el dato subyacente.
-      .andWhereNot('a.action', 'ilike', 'netbackup%');
+      );
+
+    // Los eventos "netbackup.*" ya guardados no se pueden borrar de la
+    // tabla (`audit_logs` es inmutable por diseño: trigger de PostgreSQL
+    // que rechaza UPDATE/DELETE — ver migración 20260101000500); se
+    // excluyen acá, en la consulta, no en el dato subyacente.
+    for (const prefix of EXCLUDED_EVERYWHERE) query.andWhereNot('a.action', 'ilike', `${prefix}.%`);
+
+    const modulePrefix = AUDIT_MODULES[module];
+    if (modulePrefix) {
+      query.andWhere('a.action', 'ilike', `${modulePrefix}.%`);
+    } else {
+      // 'application': todo lo que no es de una integración.
+      for (const prefix of Object.values(INTEGRATION_PREFIXES)) query.andWhereNot('a.action', 'ilike', `${prefix}.%`);
+    }
 
     if (userId) query.andWhere('a.user_id', userId);
     // ILIKE (contiene, sin distinguir mayúsculas) en vez de igualdad exacta

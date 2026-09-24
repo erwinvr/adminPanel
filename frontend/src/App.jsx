@@ -57,6 +57,15 @@ const NetworkTopologyPage = lazy(() =>
   import('./pages/NetworkTopologyPage.jsx').then((m) => ({ default: m.NetworkTopologyPage }))
 );
 
+const AUDIT_ROUTES = [
+  { path: '/audit', module: 'application', title: 'Aplicación' },
+  { path: '/audit/m365', module: 'm365', title: 'Microsoft 365' },
+  { path: '/audit/ad', module: 'ad', title: 'Active Directory' },
+  { path: '/audit/veeam', module: 'veeam', title: 'Veeam' },
+  { path: '/audit/vuln', module: 'vuln', title: 'Vulnerabilidades' },
+  { path: '/audit/pam360', module: 'pam360', title: 'PAM360' },
+];
+
 function ProtectedRoute({ permission, children }) {
   const { isAuthenticated, hasPermission, user } = useAuth();
   if (!isAuthenticated) return <Navigate to="/login" replace />;
@@ -111,14 +120,18 @@ export function App() {
           </ProtectedRoute>
         }
       />
-      <Route
-        path="/audit"
-        element={
-          <ProtectedRoute permission={PERMISSIONS.AUDIT_VIEW}>
-            <AuditPage />
-          </ProtectedRoute>
-        }
-      />
+      {/* Una página de Auditoría por módulo — misma página, distinto `module`. */}
+      {AUDIT_ROUTES.map(({ path, module, title }) => (
+        <Route
+          key={path}
+          path={path}
+          element={
+            <ProtectedRoute permission={PERMISSIONS.AUDIT_VIEW}>
+              <AuditPage key={module} module={module} title={title} />
+            </ProtectedRoute>
+          }
+        />
+      ))}
       <Route
         path="/topology"
         element={
