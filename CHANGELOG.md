@@ -10,6 +10,19 @@ esas, ver `git log`.
 
 ### Corregido
 
+- **Microsoft 365 → MFA sin licencia adicional**: en tenants sin Entra
+  ID P1/P2 la sincronización avisaba "Tenant is not a B2C tenant and
+  doesn't have premium license" y no traía ningún dato de MFA (el
+  reporte `userRegistrationDetails` es solo premium). Ahora, si ese
+  reporte falla, se leen los **métodos de autenticación registrados de
+  cada usuario** (`/users/{id}/authentication/methods`, en lotes de 20
+  con reintento ante throttling) — no requiere licencia, solo agregar el
+  permiso de aplicación `UserAuthenticationMethod.Read.All` en Azure AD.
+  Informa "MFA registrado" y los métodos (correo, contraseña y TAP no
+  cuentan); sin licencia no hay "puede autenticar con MFA", así que esa
+  columna se oculta. Las cuentas deshabilitadas no se consultan. Ver
+  `docs/microsoft-365.md`. Además nginx sube `proxy_read_timeout` de
+  `/api/` a 300 s para que sincronizaciones largas no den 504.
 - **Veeam → Configuración**: con muchos jobs en producción, la
   sincronización fallaba con "Veeam respondió con un error: HTTP 500"
   sin más detalle. Causa real (confirmada contra la spec OpenAPI del

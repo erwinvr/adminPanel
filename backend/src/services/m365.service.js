@@ -18,6 +18,7 @@ import {
   fetchSubscribedSkus,
   fetchUsersWithLicenses,
   fetchUserRegistrationDetails,
+  fetchUsersAuthMethods,
 } from '../integrations/microsoft365/graphClient.js';
 import { friendlySkuName } from '../integrations/microsoft365/skuNames.js';
 import { recordEvent } from '../audit/audit.service.js';
@@ -93,18 +94,45 @@ export const m365Service = {
     let skus;
     let graphUsers;
     let mfaWarning = null;
-    let registrationDetails = [];
+    let mfaSource = null;
+    // userId → { isMfaRegistered, isMfaCapable, methodsRegistered }
+    let mfaByUserId = new Map();
     try {
       const accessToken = await getAccessToken({ tenantId: settingsRow.tenant_id, clientId: settingsRow.client_id, clientSecret });
       [skus, graphUsers] = await Promise.all([fetchSubscribedSkus(accessToken), fetchUsersWithLicenses(accessToken)]);
 
-      // El reporte de MFA pide un permiso de app aparte (AuditLog.Read.All).
-      // Si no está otorgado, Graph devuelve 403 acá — no debe tumbar el
-      // resto de la sincronización, solo dejar los campos de MFA en null.
+      // MFA: 1) reporte de registro (AuditLog.Read.All) — rápido y con
+      // `isMfaCapable`, pero Microsoft lo restringe a tenants con Entra ID
+      // P1/P2. 2) Si falla (sin licencia o sin permiso), métodos de
+      // autenticación por usuario (UserAuthenticationMethod.Read.All) — sin
+      // licencia adicional. Ninguno de los dos debe tumbar el resto de la
+      // sincronización: si ambos fallan, los campos de MFA quedan en null.
       try {
-        registrationDetails = await fetchUserRegistrationDetails(accessToken);
-      } catch (err) {
-        mfaWarning = `No se pudieron obtener datos de MFA (¿falta el permiso "AuditLog.Read.All" en la app de Azure AD?): ${err.message}`;
+        const registrationDetails = await fetchUserRegistrationDetails(accessToken);
+        mfaByUserId = new Map(
+          registrationDetails.map((r) => [
+            r.id,
+            { isMfaRegistered: r.isMfaRegistered, isMfaCapable: r.isMfaCapable, methodsRegistered: r.methodsRegistered ?? [] },
+          ])
+        );
+        mfaSource = 'registrationReport';
+      } catch (reportErr) {
+        try {
+          // Una cuenta deshabilitada no puede iniciar sesión — no vale la
+          // pena una consulta por cada una (en tenants grandes son miles).
+          const enabledIds = graphUsers.filter((u) => u.accountEnabled !== false).map((u) => u.id);
+          const { byUserId, failedCount, sampleError } = await fetchUsersAuthMethods(accessToken, enabledIds);
+          mfaByUserId = new Map([...byUserId].map(([id, m]) => [id, { ...m, isMfaCapable: null }]));
+          mfaSource = 'authenticationMethods';
+          if (failedCount > 0) {
+            mfaWarning = `No se pudo leer el MFA de ${failedCount} de ${enabledIds.length} usuarios habilitados (quedan "Sin datos"): ${sampleError}`;
+          }
+        } catch (methodsErr) {
+          mfaWarning =
+            `No se pudieron obtener datos de MFA. ` +
+            `Reporte de registro (requiere Entra ID P1/P2 y "AuditLog.Read.All"): ${reportErr.message}. ` +
+            `Métodos por usuario (sin licencia, requiere "UserAuthenticationMethod.Read.All"): ${methodsErr.message}`;
+        }
       }
     } catch (err) {
       await recordEvent({
@@ -126,8 +154,6 @@ export const m365Service = {
       consumed_units: s.consumedUnits ?? 0,
     }));
 
-    const mfaByUserId = new Map(registrationDetails.map((r) => [r.id, r]));
-
     const users = graphUsers.map((u) => {
       const mfa = mfaByUserId.get(u.id);
       return {
@@ -137,7 +163,7 @@ export const m365Service = {
         account_enabled: u.accountEnabled ?? true,
         is_mfa_registered: mfa ? mfa.isMfaRegistered : null,
         is_mfa_capable: mfa ? mfa.isMfaCapable : null,
-        methods_registered: mfa ? JSON.stringify(mfa.methodsRegistered ?? []) : null,
+        methods_registered: mfa ? JSON.stringify(mfa.methodsRegistered) : null,
       };
     });
 
@@ -154,10 +180,10 @@ export const m365Service = {
       resourceId: settingsRow.id,
       result: 'success',
       req,
-      metadata: { licensesCount: licenses.length, usersCount: users.length, mfaWarning, trigger },
+      metadata: { licensesCount: licenses.length, usersCount: users.length, mfaSource, mfaWarning, trigger },
     });
 
-    return { licensesCount: licenses.length, usersCount: users.length, syncedAt: syncedAt.toISOString(), mfaWarning };
+    return { licensesCount: licenses.length, usersCount: users.length, syncedAt: syncedAt.toISOString(), mfaSource, mfaWarning };
   },
 
   async listLicenses() {

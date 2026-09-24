@@ -12,8 +12,13 @@
  *    le exige — un usuario con esto en "No" quedaría bloqueado si el
  *    tenant llega a exigir MFA.
  *
- * Ambas pueden aparecer como "Sin datos" si el tenant no otorgó el
- * permiso AuditLog.Read.All (ver M365SettingsPage.jsx).
+ * "Puede autenticar con MFA" solo la informa el reporte de registro de
+ * Microsoft (requiere Entra ID P1/P2). Sin licencia, el sync lee los
+ * métodos registrados de cada usuario (UserAuthenticationMethod.Read.All):
+ * eso da "MFA registrado" y los métodos, pero no la capacidad por
+ * política — en ese caso la columna y su resumen se ocultan.
+ * Cualquier dato puede aparecer como "Sin datos" si falta el permiso, o
+ * para cuentas deshabilitadas (no se consultan) — ver M365SettingsPage.jsx.
  */
 
 import { useEffect, useState } from 'react';
@@ -49,13 +54,16 @@ export function M365MfaPage() {
 
   const withoutMfaCount = users.filter((u) => u.isMfaRegistered === false).length;
   const notCapableCount = users.filter((u) => u.isMfaCapable === false).length;
+  const hasCapableData = users.some((u) => u.isMfaCapable !== null);
 
   return (
     <Layout>
       <h1 className="text-2xl font-semibold">Microsoft 365 — MFA de usuarios</h1>
       <p className="topology-page__hint">
-        Datos del último sync (ver "Microsoft 365 → Configuración" para actualizar). Requiere el permiso
-        "AuditLog.Read.All" otorgado en Azure AD — si no está, estas columnas muestran "Sin datos".
+        Datos del último sync (ver "Microsoft 365 → Configuración" para actualizar). "MFA registrado" significa que el
+        usuario tiene registrado un método de segundo factor (Authenticator, teléfono, FIDO2, etc.) — no que el
+        tenant se lo exija. Requiere el permiso "UserAuthenticationMethod.Read.All" (sin licencia adicional) en
+        Azure AD; las cuentas deshabilitadas o sin permiso muestran "Sin datos".
       </p>
 
       {loading ? (
@@ -68,9 +76,10 @@ export function M365MfaPage() {
         <>
           {users.length > 0 && (
             <p className="topology-page__hint">
-              {withoutMfaCount} de {users.length} usuario{users.length === 1 ? '' : 's'} sin MFA registrado — {notCapableCount}{' '}
-              no podría{notCapableCount === 1 ? '' : 'n'} completar un desafío de MFA si se le{notCapableCount === 1 ? '' : 's'}{' '}
-              exigiera.
+              {withoutMfaCount} de {users.length} usuario{users.length === 1 ? '' : 's'} sin MFA registrado
+              {hasCapableData &&
+                ` — ${notCapableCount} no podría${notCapableCount === 1 ? '' : 'n'} completar un desafío de MFA si se le${notCapableCount === 1 ? '' : 's'} exigiera`}
+              .
             </p>
           )}
           <DataTable
@@ -83,7 +92,9 @@ export function M365MfaPage() {
                 render: (r) => badgeHtml(r.accountEnabled ? 'Activa' : 'Inactiva', r.accountEnabled ? 'success' : 'secondary'),
               },
               { key: 'isMfaRegistered', label: 'MFA registrado', render: (r) => triStateBadge(r.isMfaRegistered) },
-              { key: 'isMfaCapable', label: 'Puede autenticar con MFA', render: (r) => triStateBadge(r.isMfaCapable) },
+              ...(hasCapableData
+                ? [{ key: 'isMfaCapable', label: 'Puede autenticar con MFA', render: (r) => triStateBadge(r.isMfaCapable) }]
+                : []),
               {
                 key: 'methodsRegistered',
                 label: 'Métodos registrados',

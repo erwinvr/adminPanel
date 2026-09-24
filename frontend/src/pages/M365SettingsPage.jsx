@@ -66,8 +66,10 @@ export function M365SettingsPage() {
       <h1 className="text-2xl font-semibold">Microsoft 365 — Configuración</h1>
       <p className="topology-page__hint">
         Parámetros de conexión de la app registrada en Azure AD (Entra ID). Necesita permisos de aplicación
-        "Organization.Read.All", "User.Read.All" y "AuditLog.Read.All" (este último para el estado de MFA) en
-        Microsoft Graph, con consentimiento de administrador otorgado.
+        "Organization.Read.All" y "User.Read.All" en Microsoft Graph, con consentimiento de administrador otorgado.
+        Para el estado de MFA sin licencia adicional agregá también "UserAuthenticationMethod.Read.All" (si el tenant
+        tiene Entra ID P1/P2 se usa el reporte de registro con "AuditLog.Read.All"). Lee los métodos registrados de
+        cada usuario habilitado, por lo que en tenants grandes la sincronización puede tardar un poco más.
       </p>
 
       {loading ? (
