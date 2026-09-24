@@ -8,5 +8,18 @@ export const saveSettingsSchema = Joi.object({
   clientSecret: Joi.string().trim().min(1).max(500).allow('').optional(),
   // Minutos entre sincronizaciones automáticas — 0/null desactiva el
   // job en segundo plano para esta integración (ver syncScheduler.js).
+  // Dominios (del UPN) admitidos en la sincronización; vacío = todos.
+  allowedDomains: Joi.array()
+    .items(
+      Joi.string()
+        .trim()
+        .lowercase()
+        .max(253)
+        .pattern(/^(?!-)[a-z0-9-]+(\.[a-z0-9-]+)+$/)
+        .messages({ 'string.pattern.base': 'Dominio inválido (ej. empresa.com.bo)' })
+    )
+    .unique()
+    .max(50)
+    .default([]),
   syncIntervalMinutes: Joi.number().integer().min(0).allow(null).optional(),
 });

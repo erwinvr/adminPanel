@@ -13,8 +13,22 @@ import { Form } from '../components/Form.jsx';
 import { toast } from 'sonner';
 import { m365Service } from '../services/m365.service.js';
 import { SYNC_FREQUENCY_OPTIONS } from '../constants/syncFrequency.js';
+import { Badge } from '@/components/ui/badge.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Alert, AlertDescription } from '@/components/ui/alert.jsx';
+
+// "Empresa.com, @otra.com\n tercera.com" → ['empresa.com', 'otra.com', 'tercera.com']
+function parseDomains(text) {
+  const domains = (text ?? '')
+    .split(/[\s,;]+/)
+    .map((d) => d.trim().replace(/^@/, '').toLowerCase())
+    .filter(Boolean);
+  return [...new Set(domains)];
+}
+
+function badgeHtmlNode(admitted) {
+  return <Badge variant={admitted ? 'success' : 'secondary'}>{admitted ? 'Se admite' : 'Se ignora'}</Badge>;
+}
 
 function formatDateTime(iso) {
   if (!iso) return 'Nunca';
@@ -93,6 +107,11 @@ export function M365SettingsPage() {
                 type: 'password',
               },
               {
+                name: 'allowedDomains',
+                label: 'Dominios a admitir (separados por coma — vacío = todos; el resto de los usuarios se ignora)',
+                value: (settings.allowedDomains ?? []).join(', '),
+              },
+              {
                 name: 'syncIntervalMinutes',
                 label: 'Frecuencia de sincronización automática',
                 type: 'select',
@@ -103,11 +122,37 @@ export function M365SettingsPage() {
             ]}
             submitLabel="Guardar configuración"
             onSubmit={async (values) => {
-              await m365Service.saveSettings({ ...values, syncIntervalMinutes: Number(values.syncIntervalMinutes) });
+              await m365Service.saveSettings({
+                ...values,
+                allowedDomains: parseDomains(values.allowedDomains),
+                syncIntervalMinutes: Number(values.syncIntervalMinutes),
+              });
               toast.success('Configuración guardada');
               refresh();
             }}
           />
+
+          {settings.detectedDomains?.length > 0 && (
+            <div className="mt-4">
+              <p className="topology-page__hint">
+                Dominios detectados en el último sync (usuarios del tenant, antes de filtrar). El dominio es el del
+                userPrincipalName; un invitado externo tiene el dominio del tenant (.onmicrosoft.com).
+              </p>
+              <ul className="mt-1 flex flex-col gap-1 text-sm">
+                {settings.detectedDomains.map(({ domain, count }) => {
+                  const admitted = !settings.allowedDomains?.length || settings.allowedDomains.includes(domain);
+                  return (
+                    <li key={domain} className="flex items-center gap-2">
+                      {badgeHtmlNode(admitted)}
+                      <span>
+                        {domain} — {count} usuario{count === 1 ? '' : 's'}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
 
           <h2 className="mt-8 text-base font-semibold">Sincronización</h2>
           <p className="topology-page__hint">Última sincronización: {formatDateTime(settings.lastSyncedAt)}</p>
@@ -129,7 +174,7 @@ export function M365SettingsPage() {
               <Alert variant={syncResult.ok ? 'success' : 'destructive'}>
                 <AlertDescription>
                   {syncResult.ok
-                    ? `Sincronización exitosa: ${syncResult.licensesCount} licencias y ${syncResult.usersCount} usuarios traídos desde Microsoft 365.`
+                    ? `Sincronización exitosa: ${syncResult.licensesCount} licencias y ${syncResult.usersCount} usuarios traídos desde Microsoft 365${syncResult.ignoredUsersCount ? ` (${syncResult.ignoredUsersCount} ignorados por el filtro de dominios)` : ''}.`
                     : `Falló la sincronización: ${syncResult.message}`}
                 </AlertDescription>
               </Alert>

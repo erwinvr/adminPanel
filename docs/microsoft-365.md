@@ -57,3 +57,27 @@ Limitaciones respecto del reporte premium:
 La advertencia detalla el resultado de cada camino. Si dice `403 ... falta
 el permiso "UserAuthenticationMethod.Read.All"`, agregar ese permiso y
 otorgar el consentimiento; el siguiente sync lo toma.
+
+## Filtro de dominios
+
+En *Microsoft 365 → Configuración* se puede indicar qué **dominios**
+admitir en la sincronización (separados por coma, ej.
+`nacionalvida.com.bo, conecta.com.bo`). Los usuarios de cualquier otro
+dominio se **ignoran**: no se guardan, no aparecen en "Usuarios
+sincronizados" ni en "MFA de usuarios", y no se les consulta el MFA. Con
+la lista **vacía** se admiten todos (comportamiento anterior).
+
+- El dominio es el del **userPrincipalName** (lo que sigue a la última
+  `@`). Un **invitado externo** tiene un UPN como
+  `persona_empresa.com#EXT#@tenant.onmicrosoft.com`, así que su dominio es el
+  del tenant (`tenant.onmicrosoft.com`), no el de su empresa.
+- La configuración muestra los **dominios detectados** en el último sync con
+  su cantidad de usuarios (sobre todo el tenant, antes de filtrar) y si cada
+  uno se admite o se ignora, para poder elegir. Hay que sincronizar una vez
+  para que aparezcan.
+- El filtro rige desde la **próxima sincronización**; los usuarios de
+  dominios que dejaron de admitirse desaparecen de los datos locales en ese
+  sync (cada sync reemplaza la foto completa).
+- Las **licencias compradas** (SKUs y unidades consumidas) son del tenant
+  completo y no se filtran: las unidades consumidas siguen contando también
+  a los usuarios ignorados.

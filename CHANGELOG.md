@@ -41,6 +41,14 @@ esas, ver `git log`.
 
 ### Agregado
 
+- **Microsoft 365 → filtro de dominios**: en la configuración se indican
+  los dominios (del userPrincipalName) a admitir en la sincronización; el
+  resto de los usuarios se ignora (vacío = todos, como antes). Se aplica
+  antes de consultar el MFA, así que los usuarios ignorados no generan
+  llamadas a Graph. La pantalla muestra los dominios detectados en el
+  último sync con su cantidad de usuarios y si se admiten o ignoran, y el
+  resultado del sync informa cuántos usuarios se ignoraron. Ver
+  `docs/microsoft-365.md`.
 - **Sección PAM360**: integración con ManageEngine PAM360 vía REST API
   (AUTHTOKEN), con sincronización manual y automática en segundo plano
   (igual que AD/Veeam) y un reporte **PAM360 → Solicitudes de acceso**

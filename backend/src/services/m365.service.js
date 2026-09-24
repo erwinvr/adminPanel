@@ -21,6 +21,7 @@ import {
   fetchUsersAuthMethods,
 } from '../integrations/microsoft365/graphClient.js';
 import { friendlySkuName } from '../integrations/microsoft365/skuNames.js';
+import { countDomains, filterUsersByDomain } from '../integrations/microsoft365/domainFilter.js';
 import { recordEvent } from '../audit/audit.service.js';
 import { ValidationError } from '../errors/AppError.js';
 
@@ -33,6 +34,8 @@ function toPublicSettings(row) {
       clientSecretPreview: null,
       lastSyncedAt: null,
       syncIntervalMinutes: null,
+      allowedDomains: [],
+      detectedDomains: [],
     };
   }
   return {
@@ -42,6 +45,8 @@ function toPublicSettings(row) {
     clientSecretPreview: row.client_secret_preview,
     lastSyncedAt: row.last_synced_at,
     syncIntervalMinutes: row.sync_interval_minutes,
+    allowedDomains: row.allowed_domains ?? [],
+    detectedDomains: row.detected_domains ?? [],
   };
 }
 
@@ -50,11 +55,12 @@ export const m365Service = {
     return toPublicSettings(await m365Repository.getSettings());
   },
 
-  async saveSettings(req, { tenantId, clientId, clientSecret, syncIntervalMinutes }) {
+  async saveSettings(req, { tenantId, clientId, clientSecret, allowedDomains = [], syncIntervalMinutes }) {
     const actorId = req.session.userId;
     const changes = {
       tenant_id: tenantId,
       client_id: clientId,
+      allowed_domains: allowedDomains,
       sync_interval_minutes: syncIntervalMinutes || null,
       updated_by: actorId,
       updated_at: new Date(),
@@ -73,7 +79,7 @@ export const m365Service = {
       resourceId: row.id,
       result: 'success',
       req,
-      metadata: { tenantId, clientId, syncIntervalMinutes: changes.sync_interval_minutes, secretUpdated: Boolean(clientSecret) },
+      metadata: { tenantId, clientId, allowedDomains, syncIntervalMinutes: changes.sync_interval_minutes, secretUpdated: Boolean(clientSecret) },
     });
 
     return toPublicSettings(row);
@@ -93,13 +99,22 @@ export const m365Service = {
 
     let skus;
     let graphUsers;
+    let detectedDomains = [];
+    let ignoredUsersCount = 0;
     let mfaWarning = null;
     let mfaSource = null;
     // userId → { isMfaRegistered, isMfaCapable, methodsRegistered }
     let mfaByUserId = new Map();
     try {
       const accessToken = await getAccessToken({ tenantId: settingsRow.tenant_id, clientId: settingsRow.client_id, clientSecret });
-      [skus, graphUsers] = await Promise.all([fetchSubscribedSkus(accessToken), fetchUsersWithLicenses(accessToken)]);
+      let allGraphUsers;
+      [skus, allGraphUsers] = await Promise.all([fetchSubscribedSkus(accessToken), fetchUsersWithLicenses(accessToken)]);
+
+      // Filtro de dominios: solo se admiten los usuarios cuyo UPN pertenece
+      // a un dominio permitido (lista vacía = todos). Se aplica ANTES del
+      // MFA para no consultar métodos de usuarios que se van a ignorar.
+      detectedDomains = countDomains(allGraphUsers);
+      ({ admitted: graphUsers, ignoredCount: ignoredUsersCount } = filterUsersByDomain(allGraphUsers, settingsRow.allowed_domains));
 
       // MFA: 1) reporte de registro (AuditLog.Read.All) — rápido y con
       // `isMfaCapable`, pero Microsoft lo restringe a tenants con Entra ID
@@ -171,7 +186,7 @@ export const m365Service = {
 
     await m365Repository.replaceSyncedData({ licenses, users, userLicensePairs });
     const syncedAt = new Date();
-    await m365Repository.upsertSettings({ last_synced_at: syncedAt });
+    await m365Repository.upsertSettings({ last_synced_at: syncedAt, detected_domains: JSON.stringify(detectedDomains) });
 
     await recordEvent({
       userId: actorId,
@@ -180,10 +195,10 @@ export const m365Service = {
       resourceId: settingsRow.id,
       result: 'success',
       req,
-      metadata: { licensesCount: licenses.length, usersCount: users.length, mfaSource, mfaWarning, trigger },
+      metadata: { licensesCount: licenses.length, usersCount: users.length, ignoredUsersCount, mfaSource, mfaWarning, trigger },
     });
 
-    return { licensesCount: licenses.length, usersCount: users.length, syncedAt: syncedAt.toISOString(), mfaSource, mfaWarning };
+    return { licensesCount: licenses.length, usersCount: users.length, ignoredUsersCount, syncedAt: syncedAt.toISOString(), mfaSource, mfaWarning };
   },
 
   async listLicenses() {
