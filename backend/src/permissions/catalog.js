@@ -64,6 +64,9 @@ export const PERMISSIONS = Object.freeze({
 
   M365_VIEW: 'm365.view',
   M365_EDIT: 'm365.edit',
+
+  PAM360_VIEW: 'pam360.view',
+  PAM360_EDIT: 'pam360.edit',
 });
 
 /**
@@ -174,4 +177,7 @@ export const PERMISSION_DEFINITIONS = [
 
   { code: PERMISSIONS.M365_VIEW, module: 'm365', description: 'Ver licencias y usuarios sincronizados desde Microsoft 365' },
   { code: PERMISSIONS.M365_EDIT, module: 'm365', description: 'Configurar la conexión a Microsoft 365 y disparar la sincronización' },
+
+  { code: PERMISSIONS.PAM360_VIEW, module: 'pam360', description: 'Ver el reporte de solicitudes de acceso sincronizado desde PAM360' },
+  { code: PERMISSIONS.PAM360_EDIT, module: 'pam360', description: 'Configurar la conexión a PAM360 y disparar la sincronización' },
 ];

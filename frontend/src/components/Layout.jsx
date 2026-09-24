@@ -110,6 +110,15 @@ const MANAGEMENT_SECTIONS = [
     items: [{ path: '/vuln/settings', label: 'Configuración', permission: PERMISSIONS.VULN_EDIT, icon: Settings }],
   },
   {
+    key: 'pam360',
+    label: 'PAM360',
+    icon: Lock,
+    items: [
+      { path: '/pam360/settings', label: 'Configuración', permission: PERMISSIONS.PAM360_EDIT, icon: Settings },
+      { path: '/pam360/access-requests', label: 'Solicitudes de acceso', permission: PERMISSIONS.PAM360_VIEW, icon: KeyRound },
+    ],
+  },
+  {
     key: 'netbackup',
     label: 'Backup Networking',
     icon: Router,

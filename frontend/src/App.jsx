@@ -43,6 +43,8 @@ import { NetBackupDevicesPage } from './pages/NetBackupDevicesPage.jsx';
 import { NetBackupHistoryPage } from './pages/NetBackupHistoryPage.jsx';
 import { NetBackupBitacoraPage } from './pages/NetBackupBitacoraPage.jsx';
 import { NetBackupCompliancePage } from './pages/NetBackupCompliancePage.jsx';
+import { PAM360SettingsPage } from './pages/PAM360SettingsPage.jsx';
+import { PAM360AccessRequestsPage } from './pages/PAM360AccessRequestsPage.jsx';
 import { SmtpSettingsPage } from './pages/SmtpSettingsPage.jsx';
 import { ForcedPasswordChangePage } from './pages/ForcedPasswordChangePage.jsx';
 import { PublicDashboardPage } from './pages/PublicDashboardPage.jsx';
@@ -294,6 +296,22 @@ export function App() {
         element={
           <ProtectedRoute permission={PERMISSIONS.NETBACKUP_VIEW}>
             <NetBackupCompliancePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/pam360/settings"
+        element={
+          <ProtectedRoute permission={PERMISSIONS.PAM360_EDIT}>
+            <PAM360SettingsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/pam360/access-requests"
+        element={
+          <ProtectedRoute permission={PERMISSIONS.PAM360_VIEW}>
+            <PAM360AccessRequestsPage />
           </ProtectedRoute>
         }
       />

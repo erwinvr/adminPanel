@@ -2,10 +2,10 @@
  * jobs/syncScheduler.js
  *
  * Job en segundo plano que dispara:
- *  - la sincronización automática de Active Directory, Microsoft 365 y
- *    Veeam según `sync_interval_minutes` en ad_settings/m365_settings/
- *    backup_settings (una
- *    sola fila de configuración por integración), y
+ *  - la sincronización automática de Active Directory, Microsoft 365,
+ *    Veeam y PAM360 según `sync_interval_minutes` en ad_settings/
+ *    m365_settings/backup_settings/pam360_settings (una sola fila de
+ *    configuración por integración), y
  *  - el backup automático de CADA dispositivo de "Backup Networking"
  *    según su propio `sync_interval_minutes` en netbackup_devices
  *    (acá son varios dispositivos, cada uno con su frecuencia).
@@ -29,10 +29,12 @@ import { adRepository } from '../repositories/ad.repository.js';
 import { m365Repository } from '../repositories/m365.repository.js';
 import { backupRepository } from '../repositories/backup.repository.js';
 import { netbackupRepository } from '../repositories/netbackup.repository.js';
+import { pam360Repository } from '../repositories/pam360.repository.js';
 import { adService } from '../services/ad.service.js';
 import { m365Service } from '../services/m365.service.js';
 import { backupService } from '../services/backup.service.js';
 import { netbackupService } from '../services/netbackup.service.js';
+import { pam360Service } from '../services/pam360.service.js';
 import { logger } from '../config/logger.js';
 
 const TICK_MS = 60 * 1000; // revisa cada minuto si algo ya venció su intervalo
@@ -106,6 +108,7 @@ async function tick() {
   await checkAndRun('ad', () => adRepository.getSettings(), () => adService.sync(null));
   await checkAndRun('m365', () => m365Repository.getSettings(), () => m365Service.sync(null));
   await checkAndRun('veeam', () => backupRepository.getSettings(), () => backupService.sync(null));
+  await checkAndRun('pam360', () => pam360Repository.getSettings(), () => pam360Service.sync(null));
   await checkAndRunNetbackupDevices();
 }
 

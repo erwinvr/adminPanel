@@ -28,6 +28,17 @@ esas, ver `git log`.
 
 ### Agregado
 
+- **Sección PAM360**: integración con ManageEngine PAM360 vía REST API
+  (AUTHTOKEN), con sincronización manual y automática en segundo plano
+  (igual que AD/Veeam) y un reporte **PAM360 → Solicitudes de acceso**
+  (solicitante, recurso, cuenta, motivo, ventana pedida y estado, con
+  búsqueda y paginación del lado del servidor). El historial se
+  **acumula** en cada sync en vez de reemplazarse. Incluye un campo
+  **zona horaria del servidor PAM360** porque PAM360 manda las fechas
+  como hora local sin zona y el backend corre en UTC. Permisos nuevos
+  `pam360.view` y `pam360.edit`. Ver `docs/pam360.md` (incluye la
+  limitación: Inicio/Fin son la ventana solicitada, y la verificación
+  contra un PAM360 real está pendiente).
 - **Veeam → Configuración**: frecuencia de **sincronización automática
   en segundo plano** (manual / 15 min / 30 min / cada hora / 6 / 12 /
   24 h), igual que Active Directory y Microsoft 365. Las corridas

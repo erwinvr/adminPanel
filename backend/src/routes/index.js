@@ -30,6 +30,7 @@ import complianceRoutes from './compliance.routes.js';
 import smtpRoutes from './smtp.routes.js';
 import m365Routes from './m365.routes.js';
 import networkTopologyRoutes from './networkTopology.routes.js';
+import pam360Routes from './pam360.routes.js';
 
 const router = Router();
 
@@ -60,5 +61,6 @@ router.use('/netbackup', netbackupRoutes);
 router.use('/smtp', smtpRoutes);
 router.use('/m365', m365Routes);
 router.use('/network-topology', networkTopologyRoutes);
+router.use('/pam360', pam360Routes);
 
 export default router;

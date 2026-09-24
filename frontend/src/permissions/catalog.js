@@ -64,4 +64,7 @@ export const PERMISSIONS = Object.freeze({
 
   M365_VIEW: 'm365.view',
   M365_EDIT: 'm365.edit',
+
+  PAM360_VIEW: 'pam360.view',
+  PAM360_EDIT: 'pam360.edit',
 });
