@@ -1,28 +1,15 @@
 import { db } from '../config/database.js';
+import { createSettingsRepository } from './settings.js';
+import { replaceTableContents } from './bulk.js';
 
 export const adRepository = {
-  getSettings() {
-    return db('ad_settings').first();
-  },
-
-  async upsertSettings(changes) {
-    const existing = await db('ad_settings').first();
-    if (existing) {
-      const [row] = await db('ad_settings').where({ id: existing.id }).update(changes).returning('*');
-      return row;
-    }
-    const [row] = await db('ad_settings').insert(changes).returning('*');
-    return row;
-  },
+  ...createSettingsRepository('ad_settings'),
 
   // Reemplaza TODO el contenido de ad_users dentro de una transacción —
   // es una foto del último sync, no un espejo incremental (ver
   // comentario en la migración).
-  async replaceSyncedUsers(users) {
-    await db.transaction(async (trx) => {
-      await trx('ad_users').del();
-      if (users.length) await trx('ad_users').insert(users);
-    });
+  replaceSyncedUsers(users) {
+    return replaceTableContents(db, 'ad_users', users);
   },
 
   listUsers() {
@@ -82,11 +69,8 @@ export const adRepository = {
 
   // Mismo criterio que replaceSyncedUsers — foto completa reemplazada
   // en cada sync, no un espejo incremental.
-  async replaceSyncedComputers(computers) {
-    await db.transaction(async (trx) => {
-      await trx('ad_computers').del();
-      if (computers.length) await trx('ad_computers').insert(computers);
-    });
+  replaceSyncedComputers(computers) {
+    return replaceTableContents(db, 'ad_computers', computers);
   },
 
   listComputers() {

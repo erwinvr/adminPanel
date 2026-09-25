@@ -10,6 +10,19 @@ esas, ver `git log`.
 
 ### Corregido
 
+- **Sincronizaciones grandes (AD, Microsoft 365, Veeam, Vulnerabilidades,
+  PAM360)**: los inserts masivos iban en una sola consulta y PostgreSQL
+  limita a 65.535 parámetros por consulta — la sincronización fallaba por
+  completo a partir de ~5.900 usuarios de AD (o ~9.300 de M365). Ahora se
+  insertan por lotes (`repositories/bulk.js`); verificado con 60.000 filas.
+  El upsert de PAM360 además tolera IDs repetidos en la misma respuesta.
+- **Microsoft 365 → Usuarios y MFA**: el cruce usuarios × licencias se
+  hacía en memoria (O(n·m)) y bloqueaba el servidor entero: 10 s con 20.000
+  usuarios, 17 s con 50.000. Las dos páginas ahora **paginan y buscan en el
+  servidor** (`GET /m365/users?page&pageSize&search` + `/m365/users/summary`
+  para los totales de MFA): 25 ms la primera página y ~200 ms una búsqueda
+  con 53.000 usuarios. La búsqueda sigue ignorando tildes (extensión
+  `unaccent`) y encontrando por nombre de licencia.
 - **Microsoft 365 → MFA sin licencia adicional**: en tenants sin Entra
   ID P1/P2 la sincronización avisaba "Tenant is not a B2C tenant and
   doesn't have premium license" y no traía ningún dato de MFA (el
@@ -132,6 +145,23 @@ esas, ver `git log`.
 
 ### Cambiado
 
+- **Backup Networking → almacenamiento de configuraciones**: cada corrida
+  guardaba la configuración completa aunque no hubiera cambiado (medido:
+  3.465 corridas, 5 configuraciones distintas, 12 MB). Ahora hay una fila por
+  configuración distinta (`netbackup_configs`, por dispositivo + hash
+  normalizado) y cada corrida la referencia: **12 MB → ~1 MB** y el
+  crecimiento pasa a depender de cuántas veces cambia una configuración, no
+  de cuántos backups se hacen. Se conserva el texto de la primera vez que se
+  vio cada configuración (las corridas repetidas solo difieren en líneas
+  volátiles como el timestamp del export). Migración reversible; ver
+  `docs/deployment.md` (`VACUUM FULL` una vez) — Bitácora, historial,
+  compliance y topología dan el mismo resultado.
+- **Índices** para volúmenes altos: Auditoría por módulo
+  (`action text_pattern_ops` + fecha; las consultas de módulo usan `LIKE` de
+  prefijo en vez de `ILIKE`: el conteo con 1,5 M de eventos bajó de 1.625 ms
+  a 141 ms), claves foráneas inversas (`m365_user_licenses.m365_license_id`,
+  `user_roles.role_id`, `role_permissions.permission_id`) y ordenamiento de
+  usuarios de M365/AD. Se crean con `CONCURRENTLY` (sin bloquear escrituras).
 - **Auditoría dividida por módulo**: la página "Auditoría" pasa a
   llamarse **Aplicación** y muestra solo los eventos de la aplicación
   (usuarios, roles, sesiones, ABM, etc.); se agregan páginas

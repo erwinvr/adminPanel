@@ -1,32 +1,16 @@
 import { db } from '../config/database.js';
+import { createSettingsRepository } from './settings.js';
+import { replaceTableContents } from './bulk.js';
 
 export const backupRepository = {
-  getSettings() {
-    return db('backup_settings').first();
+  ...createSettingsRepository('backup_settings'),
+
+  replaceSyncedJobs(jobs) {
+    return replaceTableContents(db, 'backup_jobs', jobs);
   },
 
-  async upsertSettings(changes) {
-    const existing = await db('backup_settings').first();
-    if (existing) {
-      const [row] = await db('backup_settings').where({ id: existing.id }).update(changes).returning('*');
-      return row;
-    }
-    const [row] = await db('backup_settings').insert(changes).returning('*');
-    return row;
-  },
-
-  async replaceSyncedJobs(jobs) {
-    await db.transaction(async (trx) => {
-      await trx('backup_jobs').del();
-      if (jobs.length) await trx('backup_jobs').insert(jobs);
-    });
-  },
-
-  async replaceSyncedRepositories(repositories) {
-    await db.transaction(async (trx) => {
-      await trx('backup_repositories').del();
-      if (repositories.length) await trx('backup_repositories').insert(repositories);
-    });
+  replaceSyncedRepositories(repositories) {
+    return replaceTableContents(db, 'backup_repositories', repositories);
   },
 
   listJobs() {

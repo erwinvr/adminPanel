@@ -24,8 +24,11 @@
 import { useEffect, useState } from 'react';
 import { Layout } from '../components/Layout.jsx';
 import { DataTable } from '../components/DataTable.jsx';
+import { Pagination } from '../components/Pagination.jsx';
 import { m365Service } from '../services/m365.service.js';
+import { usePagedList } from '../hooks/usePagedList.js';
 import { Alert, AlertDescription } from '@/components/ui/alert.jsx';
+import { Input } from '@/components/ui/input.jsx';
 import { badgeHtml } from '@/lib/badgeHtml.js';
 import { escapeHtml } from '@/lib/escapeHtml.js';
 
@@ -36,25 +39,13 @@ function triStateBadge(value) {
 }
 
 export function M365MfaPage() {
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const { items, meta, loading, error, params, setSearchDebounced, goToPage } = usePagedList(m365Service.listUsers);
+  // Totales de TODO el tenant (no de la página visible), calculados en SQL.
+  const [summary, setSummary] = useState(null);
 
   useEffect(() => {
-    (async () => {
-      try {
-        setUsers(await m365Service.listUsers());
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    })();
+    m365Service.getUsersSummary().then(setSummary).catch(() => setSummary(null));
   }, []);
-
-  const withoutMfaCount = users.filter((u) => u.isMfaRegistered === false).length;
-  const notCapableCount = users.filter((u) => u.isMfaCapable === false).length;
-  const hasCapableData = users.some((u) => u.isMfaCapable !== null);
 
   return (
     <Layout>
@@ -66,22 +57,30 @@ export function M365MfaPage() {
         Azure AD; las cuentas deshabilitadas o sin permiso muestran "Sin datos".
       </p>
 
-      {loading ? (
-        <p className="text-muted-foreground">Cargando…</p>
-      ) : error ? (
+      {summary && summary.total > 0 && (
+        <p className="topology-page__hint">
+          {summary.withoutMfa} de {summary.total} usuario{summary.total === 1 ? '' : 's'} sin MFA registrado
+          {summary.hasCapableData &&
+            ` — ${summary.notMfaCapable} no podría${summary.notMfaCapable === 1 ? '' : 'n'} completar un desafío de MFA si se le${summary.notMfaCapable === 1 ? '' : 's'} exigiera`}
+          .
+        </p>
+      )}
+
+      <div className="my-4">
+        <Input
+          type="search"
+          onChange={(e) => setSearchDebounced(e.target.value)}
+          placeholder="Buscar por nombre, email o licencia"
+          className="max-w-sm"
+        />
+      </div>
+
+      {error ? (
         <Alert variant="destructive">
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       ) : (
         <>
-          {users.length > 0 && (
-            <p className="topology-page__hint">
-              {withoutMfaCount} de {users.length} usuario{users.length === 1 ? '' : 's'} sin MFA registrado
-              {hasCapableData &&
-                ` — ${notCapableCount} no podría${notCapableCount === 1 ? '' : 'n'} completar un desafío de MFA si se le${notCapableCount === 1 ? '' : 's'} exigiera`}
-              .
-            </p>
-          )}
           <DataTable
             columns={[
               { key: 'displayName', label: 'Nombre' },
@@ -92,7 +91,7 @@ export function M365MfaPage() {
                 render: (r) => badgeHtml(r.accountEnabled ? 'Activa' : 'Inactiva', r.accountEnabled ? 'success' : 'secondary'),
               },
               { key: 'isMfaRegistered', label: 'MFA registrado', render: (r) => triStateBadge(r.isMfaRegistered) },
-              ...(hasCapableData
+              ...(summary?.hasCapableData
                 ? [{ key: 'isMfaCapable', label: 'Puede autenticar con MFA', render: (r) => triStateBadge(r.isMfaCapable) }]
                 : []),
               {
@@ -101,9 +100,19 @@ export function M365MfaPage() {
                 render: (r) => (r.methodsRegistered?.length ? r.methodsRegistered.map((m) => escapeHtml(m)).join(', ') : '—'),
               },
             ]}
-            rows={users}
-            emptyMessage='No hay usuarios sincronizados todavía. Andá a "Configuración" y sincronizá.'
+            rows={items}
+            paginated={false}
+            emptyMessage={
+              loading
+                ? 'Cargando…'
+                : params.search
+                  ? 'Ningún usuario coincide con la búsqueda'
+                  : 'No hay usuarios sincronizados todavía. Andá a "Configuración" y sincronizá.'
+            }
           />
+          {meta && (
+            <Pagination page={meta.pagination.page} totalPages={meta.pagination.totalPages} onChange={goToPage} />
+          )}
         </>
       )}
     </Layout>

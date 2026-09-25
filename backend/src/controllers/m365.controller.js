@@ -20,7 +20,11 @@ export async function listLicenses(req, res) {
   res.status(200).json({ success: true, data: licenses });
 }
 
+export async function getUsersSummary(req, res) {
+  res.status(200).json({ success: true, data: await m365Service.getUsersSummary() });
+}
+
 export async function listUsers(req, res) {
-  const users = await m365Service.listUsers();
-  res.status(200).json({ success: true, data: users });
+  const { items, pagination } = await m365Service.listUsers(req.query);
+  res.status(200).json({ success: true, data: items, meta: { pagination } });
 }

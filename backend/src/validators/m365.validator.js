@@ -1,5 +1,11 @@
 import Joi from 'joi';
 
+export const listUsersQuerySchema = Joi.object({
+  page: Joi.number().integer().min(1).default(1),
+  pageSize: Joi.number().integer().min(1).max(100).default(10),
+  search: Joi.string().trim().max(200).allow('').optional(),
+});
+
 export const saveSettingsSchema = Joi.object({
   tenantId: Joi.string().trim().min(1).max(200).required(),
   clientId: Joi.string().trim().uuid().required(),

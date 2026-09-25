@@ -1,25 +1,12 @@
 import { db } from '../config/database.js';
+import { createSettingsRepository } from './settings.js';
+import { replaceTableContents } from './bulk.js';
 
 export const vulnRepository = {
-  getSettings() {
-    return db('vuln_settings').first();
-  },
+  ...createSettingsRepository('vuln_settings'),
 
-  async upsertSettings(changes) {
-    const existing = await db('vuln_settings').first();
-    if (existing) {
-      const [row] = await db('vuln_settings').where({ id: existing.id }).update(changes).returning('*');
-      return row;
-    }
-    const [row] = await db('vuln_settings').insert(changes).returning('*');
-    return row;
-  },
-
-  async replaceSyncedComputers(computers) {
-    await db.transaction(async (trx) => {
-      await trx('vuln_computers').del();
-      if (computers.length) await trx('vuln_computers').insert(computers);
-    });
+  replaceSyncedComputers(computers) {
+    return replaceTableContents(db, 'vuln_computers', computers);
   },
 
   listComputers() {

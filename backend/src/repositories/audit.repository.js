@@ -27,18 +27,20 @@ export const auditRepository = {
         'a.metadata'
       );
 
+    // LIKE (no ILIKE): las acciones son códigos en minúscula, y solo LIKE
+    // de prefijo puede usar el índice `audit_logs_action_pattern_occurred_idx`.
     // Los eventos "netbackup.*" ya guardados no se pueden borrar de la
     // tabla (`audit_logs` es inmutable por diseño: trigger de PostgreSQL
     // que rechaza UPDATE/DELETE — ver migración 20260101000500); se
     // excluyen acá, en la consulta, no en el dato subyacente.
-    for (const prefix of EXCLUDED_EVERYWHERE) query.andWhereNot('a.action', 'ilike', `${prefix}.%`);
+    for (const prefix of EXCLUDED_EVERYWHERE) query.andWhereNot('a.action', 'like', `${prefix}.%`);
 
     const modulePrefix = AUDIT_MODULES[module];
     if (modulePrefix) {
-      query.andWhere('a.action', 'ilike', `${modulePrefix}.%`);
+      query.andWhere('a.action', 'like', `${modulePrefix}.%`);
     } else {
       // 'application': todo lo que no es de una integración.
-      for (const prefix of Object.values(INTEGRATION_PREFIXES)) query.andWhereNot('a.action', 'ilike', `${prefix}.%`);
+      for (const prefix of Object.values(INTEGRATION_PREFIXES)) query.andWhereNot('a.action', 'like', `${prefix}.%`);
     }
 
     if (userId) query.andWhere('a.user_id', userId);

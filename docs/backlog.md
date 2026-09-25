@@ -61,6 +61,36 @@ registro de "esto lo vi, no lo tocaba porque no era lo que se pedía".
   lo nota nadie porque ninguna página usa `enabledWhen` sobre un
   `checkbox-group`, pero el bug está igual de latente.
 
+## Escalabilidad (revisada; pendiente solo si el volumen lo pide)
+
+Medido con datos sintéticos en la revisión de rendimiento (50.000
+usuarios de M365, 1,5 millones de eventos de auditoría). Lo ya resuelto
+está en `CHANGELOG.md`; esto es lo que se dejó a propósito:
+
+- **Listas de Active Directory** (usuarios, equipos, administradores)
+  siguen cargando todo y filtrando/paginando en el navegador. Sin problema
+  hoy (miles de objetos, respuestas comprimidas); pasarlas a paginación del
+  servidor (como Microsoft 365, con `usePagedList`) si un AD supera ~20.000
+  objetos.
+- **Búsqueda de texto de M365** usa `unaccent(lower(...)) LIKE '%x%'`
+  (recorre la tabla): ~0,2 s con 53.000 usuarios, ~1,2 s buscando por
+  licencia. Si un tenant supera ~200.000 usuarios, agregar un índice
+  `pg_trgm` (GIN) sobre una función `unaccent` marcada `IMMUTABLE`.
+- **Paginación por `OFFSET`**: sirve hasta decenas de miles de páginas
+  (80 ms en la página 3.000 de 5.339); para recorrer millones de filas
+  convendría paginar por cursor (ej. `occurred_at` + `id` en Auditoría).
+- **Auditoría** (`audit_logs`, inmutable y siempre creciente): el conteo de
+  la página "Aplicación" recorre la tabla (~350 ms con 1,5 M de filas). Si
+  supera decenas de millones, particionarla por mes (las particiones viejas
+  se pueden archivar) o guardar el conteo aparte. El 85 % de los eventos son
+  corridas de Backup Networking (`netbackup.run`, uno por backup), que
+  ninguna página muestra: si preocupa el crecimiento, dejar de auditar cada
+  corrida exitosa programada es la palanca más grande.
+- **Sincronizaciones completas** (`DELETE` + `INSERT` por lotes): simples y
+  correctas, pero reescriben toda la tabla en cada sync (12.000 usuarios ≈ 2
+  s). Con volúmenes mucho mayores o frecuencias de pocos minutos, pasar a
+  `upsert` incremental y borrar solo lo que ya no existe.
+
 ## Testing
 
 - **Ninguna funcionalidad de esta sesión tiene tests automatizados

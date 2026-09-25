@@ -1,19 +1,9 @@
 import { db } from '../config/database.js';
+import { createSettingsRepository } from './settings.js';
+import { chunkedInsert } from './bulk.js';
 
 export const m365Repository = {
-  getSettings() {
-    return db('m365_settings').first();
-  },
-
-  async upsertSettings(changes) {
-    const existing = await db('m365_settings').first();
-    if (existing) {
-      const [row] = await db('m365_settings').where({ id: existing.id }).update(changes).returning('*');
-      return row;
-    }
-    const [row] = await db('m365_settings').insert(changes).returning('*');
-    return row;
-  },
+  ...createSettingsRepository('m365_settings'),
 
   // Reemplaza TODO el contenido de las tablas de sincronización dentro de
   // una transacción — son una foto del último sync, no un espejo
@@ -24,8 +14,8 @@ export const m365Repository = {
       await trx('m365_licenses').del();
       await trx('m365_users').del();
 
-      const insertedLicenses = licenses.length ? await trx('m365_licenses').insert(licenses).returning(['id', 'sku_id']) : [];
-      const insertedUsers = users.length ? await trx('m365_users').insert(users).returning(['id', 'aad_object_id']) : [];
+      const insertedLicenses = await chunkedInsert(trx, 'm365_licenses', licenses, { returning: ['id', 'sku_id'] });
+      const insertedUsers = await chunkedInsert(trx, 'm365_users', users, { returning: ['id', 'aad_object_id'] });
 
       const licenseIdBySkuId = new Map(insertedLicenses.map((l) => [l.sku_id, l.id]));
       const userIdByAadId = new Map(insertedUsers.map((u) => [u.aad_object_id, u.id]));
@@ -37,9 +27,7 @@ export const m365Repository = {
         }))
         .filter((p) => p.m365_user_id && p.m365_license_id);
 
-      if (pairsToInsert.length) {
-        await trx('m365_user_licenses').insert(pairsToInsert);
-      }
+      await chunkedInsert(trx, 'm365_user_licenses', pairsToInsert);
     });
   },
 
@@ -56,28 +44,99 @@ export const m365Repository = {
       .orderBy('sku_part_number');
   },
 
-  async listUsersWithLicenses() {
-    const users = await db('m365_users')
+  /**
+   * Una PÁGINA de usuarios con sus licencias (códigos SKU). La búsqueda es
+   * por términos: cada término debe aparecer (sin tildes ni mayúsculas) en
+   * el nombre, el email o alguna licencia del usuario — `termFilters` trae,
+   * por término, los SKU cuyo nombre lo contiene (los resuelve el servicio,
+   * que conoce los nombres comerciales).
+   *
+   * @param {{ page: number, pageSize: number, termFilters?: { term: string, skus: string[] }[] }} params
+   */
+  async listUsersPage({ page, pageSize, termFilters = [] }) {
+    const query = db('m365_users as u');
+
+    for (const { term, skus } of termFilters) {
+      const pattern = `%${term.replace(/[\\%_]/g, '\\$&')}%`;
+      query.andWhere((qb) => {
+        qb.whereRaw('unaccent(lower(u.display_name)) like ?', [pattern]).orWhereRaw(
+          'unaccent(lower(u.user_principal_name)) like ?',
+          [pattern]
+        );
+        if (skus.length) {
+          // `IN (subconsulta)` NO correlacionada: PostgreSQL la resuelve una
+          // sola vez (hash) — un EXISTS correlacionado dentro de un OR se
+          // evalúa fila por fila y tarda segundos con decenas de miles.
+          qb.orWhereIn(
+            'u.id',
+            db('m365_user_licenses as ul')
+              .join('m365_licenses as l', 'l.id', 'ul.m365_license_id')
+              .whereIn('l.sku_part_number', skus)
+              .select('ul.m365_user_id')
+          );
+        }
+      });
+    }
+
+    const countQuery = query.clone().count({ count: 'u.id' }).first();
+    const rowsQuery = query
+      .clone()
       .select(
-        'id',
-        'aad_object_id as aadObjectId',
-        'display_name as displayName',
-        'user_principal_name as userPrincipalName',
-        'account_enabled as accountEnabled',
-        'is_mfa_registered as isMfaRegistered',
-        'is_mfa_capable as isMfaCapable',
-        'methods_registered as methodsRegistered',
-        'synced_at as syncedAt'
+        'u.id',
+        'u.aad_object_id as aadObjectId',
+        'u.display_name as displayName',
+        'u.user_principal_name as userPrincipalName',
+        'u.account_enabled as accountEnabled',
+        'u.is_mfa_registered as isMfaRegistered',
+        'u.is_mfa_capable as isMfaCapable',
+        'u.methods_registered as methodsRegistered',
+        'u.synced_at as syncedAt'
       )
-      .orderBy('display_name');
+      .orderBy([{ column: 'u.display_name' }, { column: 'u.id' }])
+      .limit(pageSize)
+      .offset((page - 1) * pageSize);
 
-    const links = await db('m365_user_licenses as ul')
-      .join('m365_licenses as l', 'l.id', 'ul.m365_license_id')
-      .select('ul.m365_user_id as userId', 'l.sku_part_number as skuPartNumber');
+    const [{ count }, users] = await Promise.all([countQuery, rowsQuery]);
 
-    return users.map((u) => ({
-      ...u,
-      licenses: links.filter((l) => l.userId === u.id).map((l) => l.skuPartNumber),
-    }));
+    // Licencias solo de los usuarios de ESTA página (no de todo el tenant).
+    const links = users.length
+      ? await db('m365_user_licenses as ul')
+          .join('m365_licenses as l', 'l.id', 'ul.m365_license_id')
+          .whereIn('ul.m365_user_id', users.map((u) => u.id))
+          .select('ul.m365_user_id as userId', 'l.sku_part_number as skuPartNumber')
+      : [];
+    const skusByUserId = new Map();
+    for (const { userId, skuPartNumber } of links) {
+      if (!skusByUserId.has(userId)) skusByUserId.set(userId, []);
+      skusByUserId.get(userId).push(skuPartNumber);
+    }
+
+    return {
+      items: users.map((u) => ({ ...u, licenses: skusByUserId.get(u.id) ?? [] })),
+      pagination: {
+        page,
+        pageSize,
+        total: Number(count),
+        totalPages: Math.max(1, Math.ceil(Number(count) / pageSize)),
+      },
+    };
+  },
+
+  /** Totales de MFA de TODO el tenant sincronizado (no de la página). */
+  async usersSummary() {
+    const row = await db('m365_users')
+      .select(
+        db.raw('count(*) as total'),
+        db.raw('count(*) filter (where is_mfa_registered = false) as "withoutMfa"'),
+        db.raw('count(*) filter (where is_mfa_capable = false) as "notMfaCapable"'),
+        db.raw('count(is_mfa_capable) as "withCapableData"')
+      )
+      .first();
+    return {
+      total: Number(row.total),
+      withoutMfa: Number(row.withoutMfa),
+      notMfaCapable: Number(row.notMfaCapable),
+      hasCapableData: Number(row.withCapableData) > 0,
+    };
   },
 };

@@ -101,13 +101,29 @@ export const netbackupRepository = {
       .then(([row]) => row.id);
   },
 
+  // La configuración se guarda UNA vez por (dispositivo, hash) en
+  // netbackup_configs — la corrida solo la referencia (config_id). Si ese
+  // hash ya existía, solo se refresca `last_seen_at`; se conserva el texto
+  // de la primera vez que se vio.
   finishRun(id, { result, errorMessage, configOutput, configHash }) {
-    return db('netbackup_runs').where({ id }).update({
-      result,
-      error_message: errorMessage ?? null,
-      config_output: configOutput ?? null,
-      config_hash: configHash ?? null,
-      finished_at: db.fn.now(),
+    return db.transaction(async (trx) => {
+      let configId = null;
+      if (configOutput && configHash) {
+        const { device_id: deviceId } = await trx('netbackup_runs').where({ id }).first('device_id');
+        const [config] = await trx('netbackup_configs')
+          .insert({ device_id: deviceId, config_hash: configHash, config_output: configOutput })
+          .onConflict(['device_id', 'config_hash'])
+          .merge({ last_seen_at: trx.fn.now() })
+          .returning('id');
+        configId = config.id;
+      }
+      await trx('netbackup_runs').where({ id }).update({
+        result,
+        error_message: errorMessage ?? null,
+        config_id: configId,
+        config_hash: configHash ?? null,
+        finished_at: trx.fn.now(),
+      });
     });
   },
 
@@ -124,7 +140,8 @@ export const netbackupRepository = {
     return db('netbackup_runs as r')
       .join('netbackup_devices as d', 'd.id', 'r.device_id')
       .join('hardware_inventory as h', 'h.id', 'd.hardware_id')
-      .select([...RUN_COLUMNS, 'r.config_output as configOutput'])
+      .leftJoin('netbackup_configs as c', 'c.id', 'r.config_id')
+      .select([...RUN_COLUMNS, 'c.config_output as configOutput'])
       .where('r.id', id)
       .first();
   },
@@ -159,10 +176,11 @@ export const netbackupRepository = {
   // contra el estado actual de cada dispositivo sin esperar al
   // próximo backup.
   findLatestSuccessfulRunForDevice(deviceId) {
-    return db('netbackup_runs')
-      .where({ device_id: deviceId, result: 'success' })
-      .select('id', 'config_output as configOutput')
-      .orderBy('started_at', 'desc')
+    return db('netbackup_runs as r')
+      .join('netbackup_configs as c', 'c.id', 'r.config_id')
+      .where({ 'r.device_id': deviceId, 'r.result': 'success' })
+      .select('r.id', 'c.config_output as configOutput')
+      .orderBy('r.started_at', 'desc')
       .first();
   },
 

@@ -25,6 +25,11 @@ import { countDomains, filterUsersByDomain } from '../integrations/microsoft365/
 import { recordEvent } from '../audit/audit.service.js';
 import { ValidationError } from '../errors/AppError.js';
 
+// Minúsculas y sin tildes (el SQL hace lo mismo con unaccent(lower(...))).
+function normalizeSearchText(text) {
+  return (text ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
 function toPublicSettings(row) {
   if (!row) {
     return {
@@ -210,11 +215,31 @@ export const m365Service = {
     }));
   },
 
-  // Las licencias de cada usuario se devuelven con su nombre comercial
-  // (ver skuNames.js), no con el SKU — quedan sin repetir aunque dos SKU
-  // distintos compartan nombre (ej. VISIOCLIENT y VISIO_PLAN2_DEPT).
-  async listUsers() {
-    const users = await m365Repository.listUsersWithLicenses();
-    return users.map((u) => ({ ...u, licenses: [...new Set(u.licenses.map(friendlySkuName))].sort((a, b) => a.localeCompare(b)) }));
+  // Una página de usuarios, con la búsqueda resuelta en SQL. Las licencias
+  // de cada usuario se devuelven con su nombre comercial (ver skuNames.js),
+  // no con el SKU — sin repetir aunque dos SKU compartan nombre (ej.
+  // VISIOCLIENT y VISIO_PLAN2_DEPT).
+  async listUsers({ page, pageSize, search }) {
+    const terms = normalizeSearchText(search).split(/\s+/).filter(Boolean).slice(0, 8);
+    let termFilters = [];
+    if (terms.length) {
+      // Cada término también puede coincidir con el NOMBRE de una licencia:
+      // se traduce a los códigos SKU del tenant cuyo nombre lo contiene.
+      const skus = (await m365Repository.listLicenses()).map((l) => l.skuPartNumber);
+      termFilters = terms.map((term) => ({
+        term,
+        skus: skus.filter((sku) => normalizeSearchText(friendlySkuName(sku)).includes(term) || sku.toLowerCase().includes(term)),
+      }));
+    }
+
+    const { items, pagination } = await m365Repository.listUsersPage({ page, pageSize, termFilters });
+    return {
+      items: items.map((u) => ({ ...u, licenses: [...new Set(u.licenses.map(friendlySkuName))].sort((a, b) => a.localeCompare(b)) })),
+      pagination,
+    };
+  },
+
+  getUsersSummary() {
+    return m365Repository.usersSummary();
   },
 };

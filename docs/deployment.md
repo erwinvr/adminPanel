@@ -231,6 +231,24 @@ fallan si el dato ya existe) — sirve para que cualquier permiso nuevo
 agregado en una actualización quede registrado en la tabla
 `permissions` sin tener que revisar manualmente qué cambió.
 
+### Notas de algunas migraciones
+
+- **Antes de migrar una instalación con datos reales, hacer un respaldo**:
+  `docker compose exec db pg_dump -U <usuario> -Fc <base> > respaldo.dump`.
+- **`20260101003600_dedup_netbackup_configs`** (Backup Networking): pasa de
+  guardar la configuración completa en cada corrida a guardar una sola vez
+  cada configuración distinta. La migración es instantánea, pero
+  PostgreSQL recién devuelve el espacio al reescribir la tabla — correr
+  **una sola vez**, en una ventana tranquila (bloquea la tabla unos
+  segundos): `docker compose exec db psql -U <usuario> -d <base> -c "VACUUM FULL netbackup_runs;"`.
+  Es reversible (`migrate:down` reconstruye el texto en cada corrida).
+- **`20260101003500_add_performance_indexes`** crea los índices con
+  `CONCURRENTLY` (no bloquea las escrituras, importante en `audit_logs`);
+  en tablas muy grandes puede tardar unos minutos.
+- **`20260101003700_enable_unaccent`** crea la extensión `unaccent`
+  (búsquedas sin tildes). Es una extensión "de confianza" en PostgreSQL 13+:
+  la puede crear el dueño de la base, sin ser superusuario.
+
 ## 9. Arquitectura de servicios
 
 ```

@@ -1,25 +1,17 @@
 import { db } from '../config/database.js';
+import { createSettingsRepository } from './settings.js';
+import { chunkedInsert } from './bulk.js';
 
 export const pam360Repository = {
-  getSettings() {
-    return db('pam360_settings').first();
-  },
-
-  async upsertSettings(changes) {
-    const existing = await db('pam360_settings').first();
-    if (existing) {
-      const [row] = await db('pam360_settings').where({ id: existing.id }).update(changes).returning('*');
-      return row;
-    }
-    const [row] = await db('pam360_settings').insert(changes).returning('*');
-    return row;
-  },
+  ...createSettingsRepository('pam360_settings'),
 
   // A diferencia de AD/Veeam (foto reemplazada entera en cada sync),
   // acá se acumula — ver comentario en la migración.
   upsertAccessRequests(rows) {
-    if (!rows.length) return Promise.resolve();
-    return db('pam360_access_requests').insert(rows).onConflict('pam360_request_id').merge();
+    // Un mismo ID repetido dentro de UN insert hace fallar el ON CONFLICT
+    // ("cannot affect row a second time") — se deja la última aparición.
+    const unique = [...new Map(rows.map((r) => [r.pam360_request_id, r])).values()];
+    return chunkedInsert(db, 'pam360_access_requests', unique, { onConflict: 'pam360_request_id' });
   },
 
   async listAccessRequests({ page, pageSize, search, from, to }) {
