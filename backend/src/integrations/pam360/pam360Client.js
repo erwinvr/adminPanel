@@ -25,8 +25,8 @@
  * pendiente.
  */
 
-import https from 'node:https';
 import { AppError } from '../../errors/AppError.js';
+import { httpsRequest, describeNetworkError } from '../http/httpsRequest.js';
 
 export class Pam360ApiError extends AppError {
   constructor(message) {
@@ -34,51 +34,13 @@ export class Pam360ApiError extends AppError {
   }
 }
 
-// Mismos códigos de red que veeamClient.js — mensajes accionables en
-// vez de un "fetch failed"/"ECONNREFUSED" pelado.
-function describeNetworkError(err) {
-  const code = err.code;
-  if (code === 'DEPTH_ZERO_SELF_SIGNED_CERT' || code === 'SELF_SIGNED_CERT_IN_CHAIN' || code === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE') {
-    return 'el servidor de PAM360 usa un certificado autofirmado o no confiable — desmarcá "Verificar certificado TLS" en la configuración si es el caso esperado.';
-  }
-  if (code === 'ECONNREFUSED') return 'conexión rechazada (¿el servicio REST de PAM360 está activo en ese puerto?).';
-  if (code === 'ETIMEDOUT' || code === 'EHOSTUNREACH' || code === 'ENETUNREACH') return 'sin respuesta del servidor (revisá red y firewall).';
-  if (code === 'ENOTFOUND') return 'no se pudo resolver el nombre del servidor.';
-  return err.message;
-}
-
-function httpsGet(url, { authToken, verifyTls }) {
-  return new Promise((resolve, reject) => {
-    const req = https.request(
-      url,
-      { method: 'GET', headers: { AUTHTOKEN: authToken, Accept: 'application/json' }, rejectUnauthorized: verifyTls, timeout: 15000 },
-      (res) => {
-        const chunks = [];
-        res.on('data', (c) => chunks.push(c));
-        res.on('end', () => {
-          let json = null;
-          try {
-            json = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-          } catch {
-            /* respuesta no JSON */
-          }
-          resolve({ status: res.statusCode, ok: res.statusCode >= 200 && res.statusCode < 300, json });
-        });
-      }
-    );
-    req.on('timeout', () => req.destroy(Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' })));
-    req.on('error', reject);
-    req.end();
-  });
-}
-
 async function pam360Get(baseUrl, path, { authToken, verifyTls }) {
   const url = `${baseUrl.replace(/\/$/, '')}${path}`;
   let response;
   try {
-    response = await httpsGet(url, { authToken, verifyTls });
+    response = await httpsRequest(url, { headers: { AUTHTOKEN: authToken, Accept: 'application/json' }, verifyTls });
   } catch (err) {
-    throw new Pam360ApiError('No se pudo contactar al servidor de PAM360: ' + describeNetworkError(err));
+    throw new Pam360ApiError('No se pudo contactar al servidor de PAM360: ' + describeNetworkError(err, 'PAM360'));
   }
 
   const result = response.json?.operation?.result;

@@ -7,14 +7,14 @@
  * Organization.Read.All + User.Read.All (consentimiento de admin).
  */
 
-import { useCallback, useEffect, useState } from 'react';
 import { Layout } from '../components/Layout.jsx';
+import { SyncSection } from '../components/SyncSection.jsx';
+import { useSettings } from '../hooks/useSettings.js';
 import { Form } from '../components/Form.jsx';
 import { toast } from 'sonner';
 import { m365Service } from '../services/m365.service.js';
 import { SYNC_FREQUENCY_OPTIONS } from '../constants/syncFrequency.js';
 import { Badge } from '@/components/ui/badge.jsx';
-import { Button } from '@/components/ui/button.jsx';
 import { Alert, AlertDescription } from '@/components/ui/alert.jsx';
 
 // "Empresa.com, @otra.com\n tercera.com" → ['empresa.com', 'otra.com', 'tercera.com']
@@ -30,50 +30,8 @@ function badgeHtmlNode(admitted) {
   return <Badge variant={admitted ? 'success' : 'secondary'}>{admitted ? 'Se admite' : 'Se ignora'}</Badge>;
 }
 
-function formatDateTime(iso) {
-  if (!iso) return 'Nunca';
-  return new Date(iso).toLocaleString('es-BO');
-}
-
 export function M365SettingsPage() {
-  const [settings, setSettings] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [syncing, setSyncing] = useState(false);
-  const [syncResult, setSyncResult] = useState(null);
-
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      setSettings(await m365Service.getSettings());
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
-
-  async function handleSync() {
-    setSyncing(true);
-    setSyncResult(null);
-    try {
-      const result = await m365Service.sync();
-      setSyncResult({ ok: true, ...result });
-      toast.success(`Sincronizado: ${result.licensesCount} licencias, ${result.usersCount} usuarios`);
-      if (result.mfaWarning) toast.error(result.mfaWarning);
-      refresh();
-    } catch (err) {
-      setSyncResult({ ok: false, message: err.message });
-      toast.error(err.message);
-    } finally {
-      setSyncing(false);
-    }
-  }
+  const { settings, loading, error, refresh } = useSettings(m365Service.getSettings);
 
   return (
     <Layout>
@@ -154,37 +112,19 @@ export function M365SettingsPage() {
             </div>
           )}
 
-          <h2 className="mt-8 text-base font-semibold">Sincronización</h2>
-          <p className="topology-page__hint">Última sincronización: {formatDateTime(settings.lastSyncedAt)}</p>
-          <p className="topology-page__hint">
-            {settings.syncIntervalMinutes
-              ? `Sincronización automática activa: ${SYNC_FREQUENCY_OPTIONS.find((o) => Number(o.value) === settings.syncIntervalMinutes)?.label.toLowerCase() ?? `cada ${settings.syncIntervalMinutes} min`}.`
-              : 'Sincronización automática desactivada — solo manual.'}
-          </p>
-
-          <Button onClick={handleSync} disabled={syncing || !settings.hasSecret}>
-            {syncing ? 'Sincronizando…' : 'Sincronizar ahora'}
-          </Button>
-          {!settings.hasSecret && (
-            <p className="topology-page__hint">Guardá la configuración con un client secret antes de poder sincronizar.</p>
-          )}
-
-          {syncResult && (
-            <div className="mt-4 flex flex-col gap-2">
-              <Alert variant={syncResult.ok ? 'success' : 'destructive'}>
-                <AlertDescription>
-                  {syncResult.ok
-                    ? `Sincronización exitosa: ${syncResult.licensesCount} licencias y ${syncResult.usersCount} usuarios traídos desde Microsoft 365${syncResult.ignoredUsersCount ? ` (${syncResult.ignoredUsersCount} ignorados por el filtro de dominios)` : ''}.`
-                    : `Falló la sincronización: ${syncResult.message}`}
-                </AlertDescription>
-              </Alert>
-              {syncResult.ok && syncResult.mfaWarning && (
-                <Alert variant="warning">
-                  <AlertDescription>{syncResult.mfaWarning}</AlertDescription>
-                </Alert>
-              )}
-            </div>
-          )}
+          <SyncSection
+            lastSyncedAt={settings.lastSyncedAt}
+            syncIntervalMinutes={settings.syncIntervalMinutes}
+            canSync={settings.hasSecret}
+            missingCredentialMessage="Guardá la configuración con un client secret antes de poder sincronizar."
+            onSync={m365Service.sync}
+            summarize={(r) => ({
+              message: `Sincronización exitosa: ${r.licensesCount} licencias y ${r.usersCount} usuarios traídos desde Microsoft 365${r.ignoredUsersCount ? ` (${r.ignoredUsersCount} ignorados por el filtro de dominios)` : ''}.`,
+              toast: `Sincronizado: ${r.licensesCount} licencias, ${r.usersCount} usuarios`,
+              extraWarning: r.mfaWarning,
+            })}
+            onSynced={refresh}
+          />
         </div>
       )}
     </Layout>

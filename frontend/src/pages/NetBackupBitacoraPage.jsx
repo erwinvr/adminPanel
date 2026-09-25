@@ -24,13 +24,9 @@ import { Checkbox } from '@/components/ui/checkbox.jsx';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table.jsx';
 import { Pagination } from '../components/Pagination.jsx';
 import { badgeHtml } from '@/lib/badgeHtml.js';
+import { formatDateTime } from '@/lib/formatDateTime.js';
 
 const VERSIONS_PAGE_SIZE = 10;
-
-function formatDateTime(iso) {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleString('es-BO');
-}
 
 function splitIntoLines(value) {
   const lines = value.split('\n');

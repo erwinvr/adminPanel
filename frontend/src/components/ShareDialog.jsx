@@ -19,14 +19,10 @@ import { Button } from '@/components/ui/button.jsx';
 import { Input } from '@/components/ui/input.jsx';
 import { Alert, AlertDescription } from '@/components/ui/alert.jsx';
 import { Copy } from 'lucide-react';
+import { formatDateTimeOrNever } from '@/lib/formatDateTime.js';
 
 function publicUrl(token) {
   return `${window.location.origin}${window.location.pathname}#/public/${token}`;
-}
-
-function formatDateTime(iso) {
-  if (!iso) return 'Nunca';
-  return new Date(iso).toLocaleString('es-BO');
 }
 
 export function ShareDialog({ dashboardKey, dashboardLabel, onClose }) {
@@ -105,7 +101,7 @@ export function ShareDialog({ dashboardKey, dashboardLabel, onClose }) {
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Generado el {formatDateTime(status.createdAt)} · Último acceso: {formatDateTime(status.lastAccessedAt)} ·{' '}
+              Generado el {formatDateTimeOrNever(status.createdAt)} · Último acceso: {formatDateTimeOrNever(status.lastAccessedAt)} ·{' '}
               {status.accessCount} vista{status.accessCount === 1 ? '' : 's'}
             </p>
             <Button type="button" variant="destructive" disabled={busy} onClick={handleRevoke}>

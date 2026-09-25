@@ -14,20 +14,16 @@
  * checkout/checkin de la contraseña. Ver docs/pam360.md.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
 import { Layout } from '../components/Layout.jsx';
 import { DataTable } from '../components/DataTable.jsx';
 import { Pagination } from '../components/Pagination.jsx';
 import { pam360Service } from '../services/pam360.service.js';
+import { usePagedList } from '../hooks/usePagedList.js';
 import { Input } from '@/components/ui/input.jsx';
 import { Alert, AlertDescription } from '@/components/ui/alert.jsx';
 import { badgeHtml } from '@/lib/badgeHtml.js';
 import { escapeHtml } from '@/lib/escapeHtml.js';
-
-function formatDateTime(iso) {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleString('es-BO');
-}
+import { formatDateTime } from '@/lib/formatDateTime.js';
 
 function statusBadge(status) {
   if (!status) return '—';
@@ -37,37 +33,9 @@ function statusBadge(status) {
 }
 
 export function PAM360AccessRequestsPage() {
-  const [state, setState] = useState({ page: 1, pageSize: 20, search: undefined });
-  const [requests, setRequests] = useState([]);
-  const [meta, setMeta] = useState(null);
-  const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const debounceRef = useRef(null);
-
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const { data, meta: m } = await pam360Service.listAccessRequests(state);
-      setRequests(data);
-      setMeta(m);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [state]);
-
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
-
-  function onSearchChange(value) {
-    clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      setState((s) => ({ ...s, search: value || undefined, page: 1 }));
-    }, 300);
-  }
+  const { items: requests, meta, loading, error, setSearchDebounced, goToPage } = usePagedList(pam360Service.listAccessRequests, {
+    pageSize: 20,
+  });
 
   return (
     <Layout>
@@ -80,7 +48,7 @@ export function PAM360AccessRequestsPage() {
         <Input
           type="text"
           placeholder="Filtrar por solicitante o recurso"
-          onChange={(e) => onSearchChange(e.target.value)}
+          onChange={(e) => setSearchDebounced(e.target.value)}
           className="max-w-xs"
         />
       </div>
@@ -115,7 +83,7 @@ export function PAM360AccessRequestsPage() {
             <Pagination
               page={meta.pagination.page}
               totalPages={meta.pagination.totalPages}
-              onChange={(page) => setState((s) => ({ ...s, page }))}
+              onChange={goToPage}
             />
           )}
         </>

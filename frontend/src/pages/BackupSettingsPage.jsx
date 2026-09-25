@@ -6,62 +6,17 @@
  * manual — mismo patrón que Active Directory / Microsoft 365.
  */
 
-import { useCallback, useEffect, useState } from 'react';
 import { Layout } from '../components/Layout.jsx';
+import { SyncSection } from '../components/SyncSection.jsx';
+import { useSettings } from '../hooks/useSettings.js';
 import { Form } from '../components/Form.jsx';
 import { toast } from 'sonner';
 import { backupService } from '../services/backup.service.js';
 import { SYNC_FREQUENCY_OPTIONS } from '../constants/syncFrequency.js';
-import { Button } from '@/components/ui/button.jsx';
 import { Alert, AlertDescription } from '@/components/ui/alert.jsx';
 
-function formatDateTime(iso) {
-  if (!iso) return 'Nunca';
-  return new Date(iso).toLocaleString('es-BO');
-}
-
 export function BackupSettingsPage() {
-  const [settings, setSettings] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [syncing, setSyncing] = useState(false);
-  const [syncResult, setSyncResult] = useState(null);
-
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      setSettings(await backupService.getSettings());
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
-
-  async function handleSync() {
-    setSyncing(true);
-    setSyncResult(null);
-    try {
-      const result = await backupService.sync();
-      setSyncResult({ ok: true, ...result });
-      if (result.jobWarnings?.length) {
-        toast.warning(`Sincronizado con advertencias: ${result.jobWarnings.length} tipo(s) de job no se pudieron leer`);
-      } else {
-        toast.success(`Sincronizado: ${result.jobsCount} jobs, ${result.repositoriesCount} repositorios`);
-      }
-      refresh();
-    } catch (err) {
-      setSyncResult({ ok: false, message: err.message });
-      toast.error(err.message);
-    } finally {
-      setSyncing(false);
-    }
-  }
+  const { settings, loading, error, refresh } = useSettings(backupService.getSettings);
 
   return (
     <Layout>
@@ -119,46 +74,23 @@ export function BackupSettingsPage() {
             }}
           />
 
-          <h2 className="mt-8 text-base font-semibold">Sincronización</h2>
-          <p className="topology-page__hint">Última sincronización: {formatDateTime(settings.lastSyncedAt)}</p>
-          <p className="topology-page__hint">
-            {settings.syncIntervalMinutes
-              ? `Sincronización automática activa: ${SYNC_FREQUENCY_OPTIONS.find((o) => Number(o.value) === settings.syncIntervalMinutes)?.label.toLowerCase() ?? `cada ${settings.syncIntervalMinutes} min`}.`
-              : 'Sincronización automática desactivada — solo manual.'}
-          </p>
-
-          <Button onClick={handleSync} disabled={syncing || !settings.hasPassword}>
-            {syncing ? 'Sincronizando…' : 'Sincronizar ahora'}
-          </Button>
-          {!settings.hasPassword && (
-            <p className="topology-page__hint">Guardá la configuración con una contraseña antes de poder sincronizar.</p>
-          )}
-
-          {syncResult && (
-            <Alert
-              className="mt-4"
-              variant={syncResult.ok ? (syncResult.jobWarnings?.length ? 'warning' : 'success') : 'destructive'}
-            >
-              <AlertDescription>
-                {syncResult.ok
-                  ? `Sincronización exitosa: ${syncResult.jobsCount} jobs y ${syncResult.repositoriesCount} repositorios traídos desde Veeam.`
-                  : `Falló la sincronización: ${syncResult.message}`}
-                {syncResult.ok && syncResult.jobWarnings?.length > 0 && (
-                  <>
-                    <p className="mt-2 font-medium">
-                      No se pudo leer el estado de {syncResult.jobWarnings.length} tipo(s) de job (el resto sincronizó
-                      bien):
-                    </p>
-                    <ul className="mt-1 list-disc pl-5">
-                      {syncResult.jobWarnings.map((w) => (
-                        <li key={w}>{w}</li>
-                      ))}
-                    </ul>
-                  </>
-                )}
-              </AlertDescription>
-            </Alert>
-          )}
+          <SyncSection
+            lastSyncedAt={settings.lastSyncedAt}
+            syncIntervalMinutes={settings.syncIntervalMinutes}
+            canSync={settings.hasPassword}
+            missingCredentialMessage="Guardá la configuración con una contraseña antes de poder sincronizar."
+            onSync={backupService.sync}
+            summarize={(r) => ({
+              message: `Sincronización exitosa: ${r.jobsCount} jobs y ${r.repositoriesCount} repositorios traídos desde Veeam.`,
+              toast: r.jobWarnings?.length
+                ? `Sincronizado con advertencias: ${r.jobWarnings.length} tipo(s) de job no se pudieron leer`
+                : `Sincronizado: ${r.jobsCount} jobs, ${r.repositoriesCount} repositorios`,
+              toastLevel: r.jobWarnings?.length ? 'warning' : 'success',
+              warnings: r.jobWarnings,
+              warningsTitle: `No se pudo leer el estado de ${r.jobWarnings?.length} tipo(s) de job (el resto sincronizó bien):`,
+            })}
+            onSynced={refresh}
+          />
         </div>
       )}
     </Layout>

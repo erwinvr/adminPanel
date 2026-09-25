@@ -8,57 +8,16 @@
  * Central: Admin → API Key Generation), no usuario/contraseña.
  */
 
-import { useCallback, useEffect, useState } from 'react';
 import { Layout } from '../components/Layout.jsx';
+import { SyncSection } from '../components/SyncSection.jsx';
+import { useSettings } from '../hooks/useSettings.js';
 import { Form } from '../components/Form.jsx';
 import { toast } from 'sonner';
 import { vulnService } from '../services/vuln.service.js';
-import { Button } from '@/components/ui/button.jsx';
 import { Alert, AlertDescription } from '@/components/ui/alert.jsx';
 
-function formatDateTime(iso) {
-  if (!iso) return 'Nunca';
-  return new Date(iso).toLocaleString('es-BO');
-}
-
 export function VulnSettingsPage() {
-  const [settings, setSettings] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [syncing, setSyncing] = useState(false);
-  const [syncResult, setSyncResult] = useState(null);
-
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      setSettings(await vulnService.getSettings());
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
-
-  async function handleSync() {
-    setSyncing(true);
-    setSyncResult(null);
-    try {
-      const result = await vulnService.sync();
-      setSyncResult({ ok: true, ...result });
-      toast.success(`Sincronizado: ${result.computersCount} equipos`);
-      refresh();
-    } catch (err) {
-      setSyncResult({ ok: false, message: err.message });
-      toast.error(err.message);
-    } finally {
-      setSyncing(false);
-    }
-  }
+  const { settings, loading, error, refresh } = useSettings(vulnService.getSettings);
 
   return (
     <Layout>
@@ -101,25 +60,17 @@ export function VulnSettingsPage() {
             }}
           />
 
-          <h2 className="mt-8 text-base font-semibold">Sincronización</h2>
-          <p className="topology-page__hint">Última sincronización: {formatDateTime(settings.lastSyncedAt)}</p>
-
-          <Button onClick={handleSync} disabled={syncing || !settings.hasApiKey}>
-            {syncing ? 'Sincronizando…' : 'Sincronizar ahora'}
-          </Button>
-          {!settings.hasApiKey && (
-            <p className="topology-page__hint">Guardá la configuración con un API key antes de poder sincronizar.</p>
-          )}
-
-          {syncResult && (
-            <Alert className="mt-4" variant={syncResult.ok ? 'success' : 'destructive'}>
-              <AlertDescription>
-                {syncResult.ok
-                  ? `Sincronización exitosa: ${syncResult.computersCount} equipos traídos desde Endpoint Central.`
-                  : `Falló la sincronización: ${syncResult.message}`}
-              </AlertDescription>
-            </Alert>
-          )}
+          <SyncSection
+            lastSyncedAt={settings.lastSyncedAt}
+            canSync={settings.hasApiKey}
+            missingCredentialMessage="Guardá la configuración con un API key antes de poder sincronizar."
+            onSync={vulnService.sync}
+            summarize={(r) => ({
+              message: `Sincronización exitosa: ${r.computersCount} equipos traídos desde Endpoint Central.`,
+              toast: `Sincronizado: ${r.computersCount} equipos`,
+            })}
+            onSynced={refresh}
+          />
         </div>
       )}
     </Layout>

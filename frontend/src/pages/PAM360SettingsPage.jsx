@@ -7,58 +7,17 @@
  * que Active Directory / Microsoft 365 / Veeam.
  */
 
-import { useCallback, useEffect, useState } from 'react';
 import { Layout } from '../components/Layout.jsx';
+import { SyncSection } from '../components/SyncSection.jsx';
+import { useSettings } from '../hooks/useSettings.js';
 import { Form } from '../components/Form.jsx';
 import { toast } from 'sonner';
 import { pam360Service } from '../services/pam360.service.js';
 import { SYNC_FREQUENCY_OPTIONS } from '../constants/syncFrequency.js';
-import { Button } from '@/components/ui/button.jsx';
 import { Alert, AlertDescription } from '@/components/ui/alert.jsx';
 
-function formatDateTime(iso) {
-  if (!iso) return 'Nunca';
-  return new Date(iso).toLocaleString('es-BO');
-}
-
 export function PAM360SettingsPage() {
-  const [settings, setSettings] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [syncing, setSyncing] = useState(false);
-  const [syncResult, setSyncResult] = useState(null);
-
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      setSettings(await pam360Service.getSettings());
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
-
-  async function handleSync() {
-    setSyncing(true);
-    setSyncResult(null);
-    try {
-      const result = await pam360Service.sync();
-      setSyncResult({ ok: true, ...result });
-      toast.success(`Sincronizado: ${result.requestsCount} solicitudes de acceso`);
-      refresh();
-    } catch (err) {
-      setSyncResult({ ok: false, message: err.message });
-      toast.error(err.message);
-    } finally {
-      setSyncing(false);
-    }
-  }
+  const { settings, loading, error, refresh } = useSettings(pam360Service.getSettings);
 
   return (
     <Layout>
@@ -121,30 +80,18 @@ export function PAM360SettingsPage() {
             }}
           />
 
-          <h2 className="mt-8 text-base font-semibold">Sincronización</h2>
-          <p className="topology-page__hint">Última sincronización: {formatDateTime(settings.lastSyncedAt)}</p>
-          <p className="topology-page__hint">
-            {settings.syncIntervalMinutes
-              ? `Sincronización automática activa: ${SYNC_FREQUENCY_OPTIONS.find((o) => Number(o.value) === settings.syncIntervalMinutes)?.label.toLowerCase() ?? `cada ${settings.syncIntervalMinutes} min`}.`
-              : 'Sincronización automática desactivada — solo manual.'}
-          </p>
-
-          <Button onClick={handleSync} disabled={syncing || !settings.hasAuthToken}>
-            {syncing ? 'Sincronizando…' : 'Sincronizar ahora'}
-          </Button>
-          {!settings.hasAuthToken && (
-            <p className="topology-page__hint">Guardá la configuración con un AUTHTOKEN antes de poder sincronizar.</p>
-          )}
-
-          {syncResult && (
-            <Alert className="mt-4" variant={syncResult.ok ? 'success' : 'destructive'}>
-              <AlertDescription>
-                {syncResult.ok
-                  ? `Sincronización exitosa: ${syncResult.requestsCount} solicitudes de acceso traídas desde PAM360.`
-                  : `Falló la sincronización: ${syncResult.message}`}
-              </AlertDescription>
-            </Alert>
-          )}
+          <SyncSection
+            lastSyncedAt={settings.lastSyncedAt}
+            syncIntervalMinutes={settings.syncIntervalMinutes}
+            canSync={settings.hasAuthToken}
+            missingCredentialMessage="Guardá la configuración con un AUTHTOKEN antes de poder sincronizar."
+            onSync={pam360Service.sync}
+            summarize={(r) => ({
+              message: `Sincronización exitosa: ${r.requestsCount} solicitudes de acceso traídas desde PAM360.`,
+              toast: `Sincronizado: ${r.requestsCount} solicitudes de acceso`,
+            })}
+            onSynced={refresh}
+          />
         </div>
       )}
     </Layout>

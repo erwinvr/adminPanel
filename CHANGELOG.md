@@ -145,6 +145,14 @@ esas, ver `git log`.
 
 ### Cambiado
 
+- **Refactor de código compartido**: cliente HTTPS común para Veeam y PAM360
+  (`integrations/http/httpsRequest.js`); en el frontend, `SyncSection`
+  (bloque de sincronización), `useSettings`, `usePagedList` y
+  `formatDateTime` reemplazan copias repetidas — las 5 pantallas de
+  configuración pasan de ~776 a ~490 líneas y Auditoría/PAM360 usan el mismo
+  hook de lista paginada. Sin cambios de comportamiento.
+- **Compresión gzip** en nginx (JSON, JS, CSS, SVG): las listas grandes y el
+  bundle viajan 5-10 veces más chicos.
 - **Backup Networking → almacenamiento de configuraciones**: cada corrida
   guardaba la configuración completa aunque no hubiera cambiado (medido:
   3.465 corridas, 5 configuraciones distintas, 12 MB). Ahora hay una fila por

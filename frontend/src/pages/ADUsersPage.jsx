@@ -16,11 +16,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert.jsx';
 import { Checkbox } from '@/components/ui/checkbox.jsx';
 import { badgeHtml } from '@/lib/badgeHtml.js';
 import { escapeHtml } from '@/lib/escapeHtml.js';
-
-function formatDateTime(iso) {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleString('es-BO');
-}
+import { formatDateTime } from '@/lib/formatDateTime.js';
 
 export function ADUsersPage() {
   const [users, setUsers] = useState([]);

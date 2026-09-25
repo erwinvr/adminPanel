@@ -23,11 +23,7 @@ import { PERMISSIONS } from '../permissions/catalog.js';
 import { Alert, AlertDescription } from '@/components/ui/alert.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { escapeHtml } from '@/lib/escapeHtml.js';
-
-function formatDateTime(iso) {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleString('es-BO');
-}
+import { formatDateTime } from '@/lib/formatDateTime.js';
 
 export function ADOperationsPage() {
   const { hasPermission } = useAuth();

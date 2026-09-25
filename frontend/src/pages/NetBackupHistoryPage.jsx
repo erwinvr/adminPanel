@@ -19,15 +19,11 @@ import { Button } from '@/components/ui/button.jsx';
 import { badgeHtml } from '@/lib/badgeHtml.js';
 import { escapeHtml } from '@/lib/escapeHtml.js';
 import { downloadTextFile } from '@/lib/downloadTextFile.js';
+import { formatDateTime } from '@/lib/formatDateTime.js';
 
 const RESULT_LABEL = { success: 'Éxito', failure: 'Error' };
 const RESULT_VARIANT = { success: 'success', failure: 'destructive' };
 const TRIGGER_LABEL = { manual: 'Manual', scheduled: 'Automático' };
-
-function formatDateTime(iso) {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleString('es-BO');
-}
 
 export function NetBackupHistoryPage() {
   const [runs, setRuns] = useState([]);

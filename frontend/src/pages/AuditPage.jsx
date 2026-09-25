@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
 import { Layout } from '../components/Layout.jsx';
 import { DataTable } from '../components/DataTable.jsx';
 import { Pagination } from '../components/Pagination.jsx';
 import { auditService } from '../services/audit.service.js';
+import { usePagedList } from '../hooks/usePagedList.js';
 import { Input } from '@/components/ui/input.jsx';
 import { Alert, AlertDescription } from '@/components/ui/alert.jsx';
 import { badgeHtml } from '@/lib/badgeHtml.js';
@@ -20,37 +20,10 @@ function resultBadge(result) {
  * ruta de Auditoría renderiza esta misma página con su módulo y título.
  */
 export function AuditPage({ module = 'application', title = 'Aplicación' }) {
-  const [state, setState] = useState({ page: 1, pageSize: 20, module, action: undefined });
-  const [logs, setLogs] = useState([]);
-  const [meta, setMeta] = useState(null);
-  const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const debounceRef = useRef(null);
-
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const { data, meta: m } = await auditService.list(state);
-      setLogs(data);
-      setMeta(m);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [state]);
-
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
-
-  function onActionFilterChange(value) {
-    clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      setState((s) => ({ ...s, action: value || undefined, page: 1 }));
-    }, 300);
-  }
+  const { items: logs, meta, loading, error, setSearchDebounced, goToPage } = usePagedList(auditService.list, {
+    pageSize: 20,
+    module,
+  });
 
   return (
     <Layout>
@@ -59,7 +32,7 @@ export function AuditPage({ module = 'application', title = 'Aplicación' }) {
         <Input
           type="text"
           placeholder={`Filtrar por acción (ej. ${module === 'application' ? 'user.create' : `${EXAMPLE_ACTION[module]}`})`}
-          onChange={(e) => onActionFilterChange(e.target.value)}
+          onChange={(e) => setSearchDebounced(e.target.value, 'action')}
           className="max-w-xs"
         />
       </div>
@@ -89,7 +62,7 @@ export function AuditPage({ module = 'application', title = 'Aplicación' }) {
             <Pagination
               page={meta.pagination.page}
               totalPages={meta.pagination.totalPages}
-              onChange={(page) => setState((s) => ({ ...s, page }))}
+              onChange={goToPage}
             />
           )}
         </>

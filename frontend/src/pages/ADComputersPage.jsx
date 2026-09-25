@@ -20,15 +20,11 @@ import { Alert, AlertDescription } from '@/components/ui/alert.jsx';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select.jsx';
 import { badgeHtml } from '@/lib/badgeHtml.js';
 import { escapeHtml } from '@/lib/escapeHtml.js';
+import { formatDateTime } from '@/lib/formatDateTime.js';
 
 // Radix <Select.Item> no admite value="" (lo reserva para "sin
 // selección" interno) — mismo criterio que Form.jsx.
 const ALL_OS_VALUE = '__all__';
-
-function formatDateTime(iso) {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleString('es-BO');
-}
 
 export function ADComputersPage() {
   const [computers, setComputers] = useState([]);

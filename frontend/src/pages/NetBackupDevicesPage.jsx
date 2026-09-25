@@ -27,11 +27,7 @@ import { Button } from '@/components/ui/button.jsx';
 import { Alert, AlertDescription } from '@/components/ui/alert.jsx';
 import { escapeHtml } from '@/lib/escapeHtml.js';
 import { downloadTextFile } from '@/lib/downloadTextFile.js';
-
-function formatDateTime(iso) {
-  if (!iso) return 'Nunca';
-  return new Date(iso).toLocaleString('es-BO');
-}
+import { formatDateTimeOrNever } from '@/lib/formatDateTime.js';
 
 function frequencyLabel(minutes) {
   if (!minutes) return 'Manual';
@@ -127,7 +123,7 @@ export function NetBackupDevicesPage() {
             { key: 'username', label: 'Usuario', render: (r) => escapeHtml(r.username) },
             { key: 'command', label: 'Comando', render: (r) => (r.driver === 'raw_ssh' ? escapeHtml(r.command) : '—') },
             { key: 'syncIntervalMinutes', label: 'Frecuencia', render: (r) => frequencyLabel(r.syncIntervalMinutes) },
-            { key: 'lastRunAt', label: 'Última corrida', render: (r) => formatDateTime(r.lastRunAt) },
+            { key: 'lastRunAt', label: 'Última corrida', render: (r) => formatDateTimeOrNever(r.lastRunAt) },
           ]}
           rows={devices}
           actions={actions}
