@@ -10,6 +10,14 @@ esas, ver `git log`.
 
 ### Corregido
 
+- **Botón "Copiar" del enlace de "Compartir" y de la Bóveda**: siempre daba
+  "No se pudo copiar". Causa: `navigator.clipboard` solo existe en contextos
+  seguros (HTTPS o `localhost`) y el panel se sirve por HTTP en la red
+  interna (`http://<ip>:8080`), donde esa API es `undefined`. Ahora
+  (`lib/copyToClipboard.js`) se usa la API moderna cuando existe y, si no, se
+  selecciona el campo visible y se copia con `execCommand('copy')`; si
+  tampoco funcionara, el texto queda seleccionado para Ctrl+C. Verificado
+  leyendo el portapapeles real desde el origen HTTP por IP y desde localhost.
 - **Sincronizaciones grandes (AD, Microsoft 365, Veeam, Vulnerabilidades,
   PAM360)**: los inserts masivos iban en una sola consulta y PostgreSQL
   limita a 65.535 parámetros por consulta — la sincronización fallaba por
@@ -54,6 +62,15 @@ esas, ver `git log`.
 
 ### Agregado
 
+- **"Compartir" en todos los dashboards**: además del Mapa de aplicaciones,
+  Proveedores y Usuarios, ahora **Backups**, **Vulnerabilidades** y
+  **Topología de Red** generan un enlace público de solo lectura (revocable,
+  sin iniciar sesión), con el mismo permiso que hace falta para ver cada
+  dashboard. La vista pública reutiliza el mismo componente que la
+  autenticada. Ojo con el alcance: el visitante ve exactamente lo mismo que
+  un usuario con permiso (nombres de equipos y parches pendientes en
+  Vulnerabilidades; marca, modelo, IP de administración y subredes en
+  Topología de Red).
 - **Microsoft 365 → Usuarios sincronizados**: buscador por nombre, email
   o licencia (sin distinguir mayúsculas ni tildes; varios términos =
   todos deben coincidir), con contador de resultados. La columna

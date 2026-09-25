@@ -16,6 +16,9 @@ import { Alert, AlertDescription } from '@/components/ui/alert.jsx';
 import { badgeHtml } from '@/lib/badgeHtml.js';
 import { escapeHtml } from '@/lib/escapeHtml.js';
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList, Cell } from 'recharts';
+import { Share2 } from 'lucide-react';
+import { ShareDialog } from '../components/ShareDialog.jsx';
+import { Button } from '@/components/ui/button.jsx';
 
 const STATUS_BADGE_VARIANT = { Success: 'success', Warning: 'warning', Failed: 'destructive', None: 'muted' };
 const STATUS_LABEL = { Success: 'Éxito', Warning: 'Advertencia', Failed: 'Error', None: 'Sin ejecutar' };
@@ -52,40 +55,8 @@ function StatCard({ label, value }) {
   );
 }
 
-export function BackupDashboardPage() {
-  const [data, setData] = useState(null);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        setData(await backupService.getDashboard());
-      } catch (err) {
-        setError(err.message);
-      }
-    })();
-  }, []);
-
-  if (error) {
-    return (
-      <Layout>
-        <h1 className="text-2xl font-semibold">Backups</h1>
-        <Alert variant="destructive" className="mt-4">
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      </Layout>
-    );
-  }
-
-  if (!data) {
-    return (
-      <Layout>
-        <h1 className="text-2xl font-semibold">Backups</h1>
-        <p className="mt-4 text-muted-foreground">Cargando…</p>
-      </Layout>
-    );
-  }
-
+/** Contenido del dashboard (lo reutiliza la vista pública de "Compartir", ver PublicDashboardPage.jsx). */
+export function BackupDashboardView({ data, isPublic = false }) {
   const noData = data.totalJobs === 0 && data.repositories.length === 0;
 
   const repoRows = data.repositories.map((r) => {
@@ -96,8 +67,7 @@ export function BackupDashboardPage() {
   const repoChartHeight = Math.max(repoRows.length * 34, 100);
 
   return (
-    <Layout>
-      <h1 className="text-2xl font-semibold">Backups</h1>
+    <>
       <p className="topology-page__hint">
         Jobs y repositorios de Veeam Backup & Replication, tal como quedaron en el último sync.
       </p>
@@ -105,7 +75,7 @@ export function BackupDashboardPage() {
       {noData && (
         <Alert className="mb-4 max-w-xl">
           <AlertDescription>
-            Todavía no hay datos sincronizados. Andá a "Backups → Configuración" para traerlos.
+            {isPublic ? 'Todavía no hay datos sincronizados.' : 'Todavía no hay datos sincronizados. Andá a "Backups → Configuración" para traerlos.'}
           </AlertDescription>
         </Alert>
       )}
@@ -186,6 +156,57 @@ export function BackupDashboardPage() {
           )}
         </CardContent>
       </Card>
+    </>
+  );
+}
+
+export function BackupDashboardPage() {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState(null);
+  const [shareOpen, setShareOpen] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        setData(await backupService.getDashboard());
+      } catch (err) {
+        setError(err.message);
+      }
+    })();
+  }, []);
+
+  if (error) {
+    return (
+      <Layout>
+        <h1 className="text-2xl font-semibold">Backups</h1>
+        <Alert variant="destructive" className="mt-4">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      </Layout>
+    );
+  }
+
+  if (!data) {
+    return (
+      <Layout>
+        <h1 className="text-2xl font-semibold">Backups</h1>
+        <p className="mt-4 text-muted-foreground">Cargando…</p>
+      </Layout>
+    );
+  }
+
+  return (
+    <Layout>
+      <div className="flex items-start justify-between gap-4">
+        <h1 className="text-2xl font-semibold">Backups</h1>
+        <Button type="button" variant="outline" size="sm" onClick={() => setShareOpen(true)}>
+          <Share2 className="size-4" />
+          Compartir
+        </Button>
+      </div>
+      <BackupDashboardView data={data} />
+
+      {shareOpen && <ShareDialog dashboardKey="backups" dashboardLabel="Backups" onClose={() => setShareOpen(false)} />}
     </Layout>
   );
 }

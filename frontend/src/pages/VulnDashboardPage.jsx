@@ -14,6 +14,9 @@ import { vulnService } from '../services/vuln.service.js';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card.jsx';
 import { Alert, AlertDescription } from '@/components/ui/alert.jsx';
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList } from 'recharts';
+import { Share2 } from 'lucide-react';
+import { ShareDialog } from '../components/ShareDialog.jsx';
+import { Button } from '@/components/ui/button.jsx';
 
 // Color de estado (no categórico) — es la misma señal de "esto
 // necesita atención" que ya usan los top-10 de Usuarios.
@@ -38,46 +41,13 @@ function StatCard({ label, value, hint }) {
   );
 }
 
-export function VulnDashboardPage() {
-  const [data, setData] = useState(null);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        setData(await vulnService.getDashboard());
-      } catch (err) {
-        setError(err.message);
-      }
-    })();
-  }, []);
-
-  if (error) {
-    return (
-      <Layout>
-        <h1 className="text-2xl font-semibold">Vulnerabilidades</h1>
-        <Alert variant="destructive" className="mt-4">
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      </Layout>
-    );
-  }
-
-  if (!data) {
-    return (
-      <Layout>
-        <h1 className="text-2xl font-semibold">Vulnerabilidades</h1>
-        <p className="mt-4 text-muted-foreground">Cargando…</p>
-      </Layout>
-    );
-  }
-
+/** Contenido del dashboard (lo reutiliza la vista pública de "Compartir", ver PublicDashboardPage.jsx). */
+export function VulnDashboardView({ data, isPublic = false }) {
   const topRows = data.topComputers.map((c) => ({ name: c.computerName, pending: c.pendingPatchesCount }));
   const chartHeight = Math.max(topRows.length * 34, 120);
 
   return (
-    <Layout>
-      <h1 className="text-2xl font-semibold">Vulnerabilidades</h1>
+    <>
       <p className="topology-page__hint">
         Actualizaciones pendientes por equipo, tal como quedaron en el último sync de Endpoint Central.
       </p>
@@ -85,7 +55,7 @@ export function VulnDashboardPage() {
       {data.totalComputers === 0 && (
         <Alert className="mb-4 max-w-xl">
           <AlertDescription>
-            Todavía no hay equipos sincronizados. Andá a "Vulnerabilidades → Configuración" para traerlos.
+            {isPublic ? 'Todavía no hay equipos sincronizados.' : 'Todavía no hay equipos sincronizados. Andá a "Vulnerabilidades → Configuración" para traerlos.'}
           </AlertDescription>
         </Alert>
       )}
@@ -126,6 +96,57 @@ export function VulnDashboardPage() {
           )}
         </CardContent>
       </Card>
+    </>
+  );
+}
+
+export function VulnDashboardPage() {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState(null);
+  const [shareOpen, setShareOpen] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        setData(await vulnService.getDashboard());
+      } catch (err) {
+        setError(err.message);
+      }
+    })();
+  }, []);
+
+  if (error) {
+    return (
+      <Layout>
+        <h1 className="text-2xl font-semibold">Vulnerabilidades</h1>
+        <Alert variant="destructive" className="mt-4">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      </Layout>
+    );
+  }
+
+  if (!data) {
+    return (
+      <Layout>
+        <h1 className="text-2xl font-semibold">Vulnerabilidades</h1>
+        <p className="mt-4 text-muted-foreground">Cargando…</p>
+      </Layout>
+    );
+  }
+
+  return (
+    <Layout>
+      <div className="flex items-start justify-between gap-4">
+        <h1 className="text-2xl font-semibold">Vulnerabilidades</h1>
+        <Button type="button" variant="outline" size="sm" onClick={() => setShareOpen(true)}>
+          <Share2 className="size-4" />
+          Compartir
+        </Button>
+      </div>
+      <VulnDashboardView data={data} />
+
+      {shareOpen && <ShareDialog dashboardKey="vuln" dashboardLabel="Vulnerabilidades" onClose={() => setShareOpen(false)} />}
     </Layout>
   );
 }

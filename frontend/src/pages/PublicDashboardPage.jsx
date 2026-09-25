@@ -8,7 +8,8 @@
  *
  * Reusa el mismo componente de presentación que la vista autenticada
  * de cada dashboard (TopologyMapView / ProvidersTable /
- * UserSecurityInsightsView) para que lo que ve un visitante anónimo
+ * UserSecurityInsightsView / BackupDashboardView / VulnDashboardView /
+ * NetworkTopologyView) para que lo que ve un visitante anónimo
  * sea, en su alcance permitido, exactamente lo mismo que ve alguien
  * logueado — nunca una reimplementación paralela que pueda divergir.
  */
@@ -18,16 +19,22 @@ import { useParams } from 'react-router-dom';
 import { shareService } from '../services/share.service.js';
 import { ProvidersTable } from './ProvidersDashboardPage.jsx';
 import { UserSecurityInsightsView } from './UsersInsightsPage.jsx';
+import { BackupDashboardView } from './BackupDashboardPage.jsx';
+import { VulnDashboardView } from './VulnDashboardPage.jsx';
 import { Alert, AlertDescription } from '@/components/ui/alert.jsx';
 
 // React Flow es pesado — se carga aparte, igual que en App.jsx, para
 // no sumarlo al bundle de quien nunca abre un enlace de mapa.
 const TopologyMapView = lazy(() => import('./TopologyPage.jsx').then((m) => ({ default: m.TopologyMapView })));
+const NetworkTopologyView = lazy(() => import('./NetworkTopologyPage.jsx').then((m) => ({ default: m.NetworkTopologyView })));
 
 const DASHBOARD_TITLES = {
   topology: 'Mapa de Aplicaciones',
   providers: 'Proveedores y recursos',
   'users-insights': 'Usuarios',
+  backups: 'Backups',
+  vuln: 'Vulnerabilidades',
+  'network-topology': 'Topología de Red',
 };
 
 async function noopRefresh() {}
@@ -83,6 +90,13 @@ export function PublicDashboardPage() {
             )}
             {result.dashboardKey === 'providers' && <ProvidersTable providers={result.data.providers} />}
             {result.dashboardKey === 'users-insights' && <UserSecurityInsightsView data={result.data} />}
+            {result.dashboardKey === 'backups' && <BackupDashboardView data={result.data} isPublic />}
+            {result.dashboardKey === 'vuln' && <VulnDashboardView data={result.data} isPublic />}
+            {result.dashboardKey === 'network-topology' && (
+              <Suspense fallback={<p className="text-muted-foreground">Cargando…</p>}>
+                <NetworkTopologyView graph={result.data.graph} isPublic />
+              </Suspense>
+            )}
           </>
         )}
       </div>

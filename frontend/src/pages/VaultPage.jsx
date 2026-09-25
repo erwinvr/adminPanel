@@ -25,6 +25,7 @@ import { Button } from '@/components/ui/button.jsx';
 import { Alert, AlertDescription } from '@/components/ui/alert.jsx';
 import { Input } from '@/components/ui/input.jsx';
 import { escapeHtml } from '@/lib/escapeHtml.js';
+import { copyToClipboard } from '@/lib/copyToClipboard.js';
 import { Eye, Copy } from 'lucide-react';
 
 const APPLICATION_COLUMN_INDEX = 1;
@@ -140,6 +141,8 @@ export function VaultPage() {
   );
 }
 
+const SECRET_INPUT_ID = 'vault-secret-input';
+
 function RevealSecretModal({ credential, onClose }) {
   const [secret, setSecret] = useState(null);
   const [loadError, setLoadError] = useState(null);
@@ -156,12 +159,8 @@ function RevealSecretModal({ credential, onClose }) {
   }, [credential.id]);
 
   async function copySecret() {
-    try {
-      await navigator.clipboard.writeText(secret);
-      toast.success('Contraseña copiada al portapapeles');
-    } catch {
-      toast.error('No se pudo copiar — copiá el valor manualmente');
-    }
+    if (await copyToClipboard(secret, SECRET_INPUT_ID)) toast.success('Contraseña copiada al portapapeles');
+    else toast.error('No se pudo copiar — el valor quedó seleccionado, copialo con Ctrl+C');
   }
 
   return (
@@ -175,7 +174,7 @@ function RevealSecretModal({ credential, onClose }) {
           <p className="text-sm text-muted-foreground">Cargando…</p>
         ) : (
           <div className="flex items-center gap-2">
-            <Input readOnly value={secret} className="font-mono" onFocus={(e) => e.target.select()} />
+            <Input id={SECRET_INPUT_ID} readOnly value={secret} className="font-mono" onFocus={(e) => e.target.select()} />
             <Button type="button" variant="outline" size="icon" title="Copiar" onClick={copySecret}>
               <Copy className="size-4" />
             </Button>

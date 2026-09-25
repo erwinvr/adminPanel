@@ -1,14 +1,16 @@
 /**
  * components/ShareDialog.jsx
  *
- * "Compartir" para los 3 dashboards de solo lectura (Mapa de
- * aplicaciones, Proveedores y recursos, Usuarios): genera un enlace
+ * "Compartir" para los dashboards de solo lectura (Mapa de aplicaciones,
+ * Proveedores y recursos, Usuarios, Backups, Vulnerabilidades y Topología
+ * de Red): genera un enlace
  * público que cualquiera puede abrir SIN iniciar sesión — por eso el
  * diálogo es explícito sobre esto (nunca se genera nada sin que quien
  * hace clic entienda el alcance) y siempre ofrece revocar.
  *
  * `dashboardKey` tiene que ser uno de los que el backend reconoce (ver
- * services/share.service.js — 'topology' | 'providers' | 'users-insights').
+ * services/share.service.js — 'topology' | 'providers' | 'users-insights' |
+ * 'backups' | 'vuln' | 'network-topology').
  */
 
 import { useEffect, useState } from 'react';
@@ -20,6 +22,9 @@ import { Input } from '@/components/ui/input.jsx';
 import { Alert, AlertDescription } from '@/components/ui/alert.jsx';
 import { Copy } from 'lucide-react';
 import { formatDateTimeOrNever } from '@/lib/formatDateTime.js';
+import { copyToClipboard } from '@/lib/copyToClipboard.js';
+
+const LINK_INPUT_ID = 'share-link-input';
 
 function publicUrl(token) {
   return `${window.location.origin}${window.location.pathname}#/public/${token}`;
@@ -69,12 +74,8 @@ export function ShareDialog({ dashboardKey, dashboardLabel, onClose }) {
   }
 
   async function copyLink() {
-    try {
-      await navigator.clipboard.writeText(publicUrl(status.token));
-      toast.success('Enlace copiado al portapapeles');
-    } catch {
-      toast.error('No se pudo copiar — copiá el enlace manualmente');
-    }
+    if (await copyToClipboard(publicUrl(status.token), LINK_INPUT_ID)) toast.success('Enlace copiado al portapapeles');
+    else toast.error('No se pudo copiar — el enlace quedó seleccionado, copialo con Ctrl+C');
   }
 
   return (
@@ -95,7 +96,7 @@ export function ShareDialog({ dashboardKey, dashboardLabel, onClose }) {
               </AlertDescription>
             </Alert>
             <div className="flex items-center gap-2">
-              <Input readOnly value={publicUrl(status.token)} className="font-mono text-xs" onFocus={(e) => e.target.select()} />
+              <Input id={LINK_INPUT_ID} readOnly value={publicUrl(status.token)} className="font-mono text-xs" onFocus={(e) => e.target.select()} />
               <Button type="button" variant="outline" size="icon" title="Copiar" onClick={copyLink}>
                 <Copy className="size-4" />
               </Button>

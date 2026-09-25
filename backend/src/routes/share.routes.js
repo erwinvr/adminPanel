@@ -21,6 +21,9 @@ const DASHBOARD_KEY_PERMISSIONS = {
   topology: PERMISSIONS.TOPOLOGY_VIEW,
   providers: PERMISSIONS.PROVIDERS_VIEW,
   'users-insights': PERMISSIONS.INSIGHTS_VIEW,
+  backups: PERMISSIONS.BACKUPS_VIEW,
+  vuln: PERMISSIONS.VULN_VIEW,
+  'network-topology': PERMISSIONS.NETWORK_TOPOLOGY_VIEW,
 };
 
 // Réplica de requirePermission.js, pero resolviendo el código de

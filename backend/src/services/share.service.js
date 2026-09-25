@@ -1,8 +1,9 @@
 /**
  * services/share.service.js
  *
- * "Compartir" para los 3 dashboards de solo lectura del panel (Mapa de
- * aplicaciones, Proveedores y recursos, Usuarios): genera un enlace
+ * "Compartir" para los dashboards de solo lectura del panel (Mapa de
+ * aplicaciones, Proveedores y recursos, Usuarios, Backups,
+ * Vulnerabilidades y Topología de Red): genera un enlace
  * público con un token de alta entropía que cualquiera puede abrir SIN
  * iniciar sesión — el token ES la autorización, así que nunca se
  * loguea completo fuera de la URL que ya lo lleva.
@@ -12,7 +13,8 @@
  * (esa señal ya no es inocua para un visitante anónimo — ver
  * PublicDashboardPage.jsx en el frontend, que arma el candado con un
  * Set vacío). Ningún otro módulo (Bóveda, Hardware, Licencias, AD/M365
- * en crudo) es compartible — solo estos 3 dashboards.
+ * en crudo) es compartible — solo estos dashboards. Lo que ve un
+ * visitante anónimo es exactamente lo que ve un usuario con permiso.
  */
 
 import crypto from 'node:crypto';
@@ -20,10 +22,13 @@ import { shareRepository } from '../repositories/share.repository.js';
 import { topologyService } from './topology.service.js';
 import { providerService } from './provider.service.js';
 import { insightsService } from './insights.service.js';
+import { backupService } from './backup.service.js';
+import { vulnService } from './vuln.service.js';
+import { networkTopologyService } from './networkTopology.service.js';
 import { recordEvent } from '../audit/audit.service.js';
 import { NotFoundError } from '../errors/AppError.js';
 
-const DASHBOARD_KEYS = ['topology', 'providers', 'users-insights'];
+const DASHBOARD_KEYS = ['topology', 'providers', 'users-insights', 'backups', 'vuln', 'network-topology'];
 
 function assertValidKey(dashboardKey) {
   if (!DASHBOARD_KEYS.includes(dashboardKey)) throw new NotFoundError('Dashboard no encontrado');
@@ -44,6 +49,9 @@ async function loadDashboardData(dashboardKey) {
   if (dashboardKey === 'topology') return { graph: await topologyService.getGraph() };
   if (dashboardKey === 'providers') return { providers: await providerService.listProviders() };
   if (dashboardKey === 'users-insights') return await insightsService.getUserSecurityInsights();
+  if (dashboardKey === 'backups') return await backupService.getDashboard();
+  if (dashboardKey === 'vuln') return await vulnService.getDashboard();
+  if (dashboardKey === 'network-topology') return { graph: await networkTopologyService.getGraph() };
   throw new NotFoundError('Dashboard no encontrado');
 }
 

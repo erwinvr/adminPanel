@@ -20,6 +20,9 @@ import { Layout } from '../components/Layout.jsx';
 import { Alert, AlertDescription } from '@/components/ui/alert.jsx';
 import { networkTopologyService } from '../services/networkTopology.service.js';
 import { cn } from '@/lib/utils.js';
+import { Share2 } from 'lucide-react';
+import { ShareDialog } from '../components/ShareDialog.jsx';
+import { Button } from '@/components/ui/button.jsx';
 
 const NODE_WIDTH = 200;
 const RADIUS_PER_NODE = 70; // el radio crece con la cantidad de nodos para que no se amontonen
@@ -87,20 +90,8 @@ function TopologyCanvas({ flowNodes, flowEdges }) {
   );
 }
 
-export function NetworkTopologyPage() {
-  const [graph, setGraph] = useState(null);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        setGraph(await networkTopologyService.getGraph());
-      } catch (err) {
-        setError(err.message);
-      }
-    })();
-  }, []);
-
+/** Contenido del dashboard (lo reutiliza la vista pública de "Compartir", ver PublicDashboardPage.jsx). */
+export function NetworkTopologyView({ graph, isPublic = false }) {
   const flowNodes = useMemo(() => (graph ? buildCircularLayout(graph.nodes) : []), [graph]);
   const flowEdges = useMemo(
     () =>
@@ -124,8 +115,7 @@ export function NetworkTopologyPage() {
   );
 
   return (
-    <Layout>
-      <h1 className="text-2xl font-semibold">Topología de Red</h1>
+    <>
       <p className="topology-page__hint">
         Interconexión INFERIDA entre los equipos de networking marcados en el inventario ("Incluir en Topología de
         Red") — se infiere por subredes IP compartidas entre sus configs respaldadas, no por descubrimiento real
@@ -135,16 +125,11 @@ export function NetworkTopologyPage() {
         aparece aislado.
       </p>
 
-      {error ? (
-        <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      ) : graph === null ? (
-        <p className="text-muted-foreground">Cargando…</p>
-      ) : graph.nodes.length === 0 ? (
+      {graph.nodes.length === 0 ? (
         <p className="text-muted-foreground">
-          Todavía no hay equipos marcados — activá "Incluir en Topología de Red" en Hardware para los equipos de
-          networking que quieras ver acá.
+          {isPublic
+            ? 'Todavía no hay equipos marcados.'
+            : 'Todavía no hay equipos marcados — activá "Incluir en Topología de Red" en Hardware para los equipos de networking que quieras ver acá.'}
         </p>
       ) : (
         <div style={{ height: '32rem' }} className="rounded-md border">
@@ -153,6 +138,46 @@ export function NetworkTopologyPage() {
           </ReactFlowProvider>
         </div>
       )}
+    </>
+  );
+}
+
+export function NetworkTopologyPage() {
+  const [graph, setGraph] = useState(null);
+  const [error, setError] = useState(null);
+  const [shareOpen, setShareOpen] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        setGraph(await networkTopologyService.getGraph());
+      } catch (err) {
+        setError(err.message);
+      }
+    })();
+  }, []);
+
+  return (
+    <Layout>
+      <div className="flex items-start justify-between gap-4">
+        <h1 className="text-2xl font-semibold">Topología de Red</h1>
+        <Button type="button" variant="outline" size="sm" onClick={() => setShareOpen(true)}>
+          <Share2 className="size-4" />
+          Compartir
+        </Button>
+      </div>
+
+      {error ? (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      ) : graph === null ? (
+        <p className="text-muted-foreground">Cargando…</p>
+      ) : (
+        <NetworkTopologyView graph={graph} />
+      )}
+
+      {shareOpen && <ShareDialog dashboardKey="network-topology" dashboardLabel="Topología de Red" onClose={() => setShareOpen(false)} />}
     </Layout>
   );
 }
