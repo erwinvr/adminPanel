@@ -119,44 +119,58 @@ const AUTH_METHOD_TYPES = {
 };
 
 const BATCH_SIZE = 20; // máximo de sub-requests por $batch en Graph
-const BATCH_CONCURRENCY = 6;
-const MAX_RETRIES = 4;
+const MAX_CONCURRENCY = 6;
+const START_CONCURRENCY = 3;
+const MAX_ROUNDS = 200; // tope de seguridad de pasadas de reintento; el límite real es `deadlineAt`
+const MAX_PAUSE_MS = 60000;
+const TRANSIENT_BATCH_STATUSES = new Set([429, 502, 503, 504]);
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function retryAfterMs(headers, attempt) {
+function retryAfterMs(headers, fallbackMs = 2000) {
   const seconds = Number(headers?.['Retry-After'] ?? headers?.['retry-after']);
-  return Math.min((Number.isFinite(seconds) && seconds > 0 ? seconds : 2 ** attempt) * 1000, 30000);
+  return Math.min((Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : fallbackMs), MAX_PAUSE_MS);
 }
 
-/** Un $batch de hasta 20 usuarios → `{ id → { status, body, headers } }`, reintentando si el lote entero es throttled. */
+/** Falla transitoria de TODO el $batch (429/5xx): se reintenta el lote más tarde, no es un error definitivo. */
+class BatchThrottledError extends Error {
+  constructor(retryAfter) {
+    super('batch throttled');
+    this.retryAfter = retryAfter;
+  }
+}
+
+/** Un $batch de hasta 20 usuarios → `[{ userId, status, body, headers }]`. */
 async function postAuthMethodsBatch(accessToken, userIds) {
   const requests = userIds.map((userId, i) => ({ id: String(i), method: 'GET', url: `/users/${userId}/authentication/methods` }));
 
-  for (let attempt = 1; ; attempt += 1) {
-    const response = await fetch(`${GRAPH_BASE_URL}/$batch`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ requests }),
-    });
-    if ((response.status === 429 || response.status === 503) && attempt < MAX_RETRIES) {
-      await sleep(retryAfterMs({ 'Retry-After': response.headers.get('retry-after') }, attempt));
-      continue;
-    }
-    const payload = await response.json().catch(() => null);
-    if (!response.ok) {
-      throw new GraphApiError('Microsoft Graph respondió con un error: ' + (payload?.error?.message ?? `HTTP ${response.status}`));
-    }
-    const byRequestId = new Map((payload.responses ?? []).map((r) => [r.id, r]));
-    return userIds.map((userId, i) => ({ userId, ...(byRequestId.get(String(i)) ?? { status: 0 }) }));
+  const response = await fetch(`${GRAPH_BASE_URL}/$batch`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ requests }),
+  });
+  if (TRANSIENT_BATCH_STATUSES.has(response.status)) {
+    throw new BatchThrottledError(retryAfterMs({ 'Retry-After': response.headers.get('retry-after') }, 5000));
   }
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new GraphApiError('Microsoft Graph respondió con un error: ' + (payload?.error?.message ?? `HTTP ${response.status}`));
+  }
+  const byRequestId = new Map((payload.responses ?? []).map((r) => [r.id, r]));
+  return userIds.map((userId, i) => ({ userId, ...(byRequestId.get(String(i)) ?? { status: 0 }) }));
 }
 
 /**
  * Estado de MFA por usuario SIN licencia adicional: lee los métodos de
  * autenticación registrados de cada usuario (`/users/{id}/authentication/methods`,
  * permiso de aplicación `UserAuthenticationMethod.Read.All`) en lotes de
- * 20 vía `$batch`, con reintento ante throttling (429).
+ * 20 vía `$batch`.
+ *
+ * Con miles de usuarios Microsoft limita la tasa (429): en vez de insistir
+ * (lo que solo empeora el bloqueo) se respeta su `Retry-After` con una
+ * PAUSA GLOBAL para todos los lotes en vuelo, se BAJA la concurrencia ante
+ * cada limitación y se SUBE de a poco mientras no haya más. Los usuarios
+ * limitados se reintentan en rondas posteriores.
  *
  * Solo informa REGISTRO de métodos (tiene o no un método de segundo
  * factor), no si el tenant lo EXIGE (Acceso condicional / security
@@ -165,75 +179,144 @@ async function postAuthMethodsBatch(accessToken, userIds) {
  *
  * @param {string} accessToken
  * @param {string[]} userIds
- * @returns {Promise<{ byUserId: Map<string, { isMfaRegistered: boolean, methodsRegistered: string[] }>, failedCount: number, sampleError: string | null }>}
+ * `deadlineAt` (epoch ms) acota el tiempo total: pasada esa hora no se
+ * lanzan más lotes y los usuarios que no llegaron a consultarse (o quedaron
+ * limitados) se devuelven en `skippedCount` para la próxima sincronización.
+ *
+ * @param {{ onProgress?: (done: number, total: number) => void, deadlineAt?: number }} [options]
+ * @returns {Promise<{ byUserId: Map<string, { isMfaRegistered: boolean, methodsRegistered: string[] }>, failedCount: number, skippedCount: number, sampleError: string | null }>}
  */
-export async function fetchUsersAuthMethods(accessToken, userIds) {
+export async function fetchUsersAuthMethods(accessToken, userIds, { onProgress, deadlineAt } = {}) {
   const byUserId = new Map();
   let failedCount = 0;
   let sampleError = null;
+  let resolved = 0; // usuarios ya definitivos (con dato o con falla no reintentable)
+  const total = userIds.length;
 
-  const batches = [];
-  for (let i = 0; i < userIds.length; i += BATCH_SIZE) batches.push(userIds.slice(i, i + BATCH_SIZE));
+  let concurrency = START_CONCURRENCY;
+  let pauseUntil = 0;
+  let calmBatches = 0;
 
-  const record = (result) => {
-    if (result.status === 200) {
-      const types = (result.body?.value ?? []).map((m) => String(m['@odata.type'] ?? '').replace('#microsoft.graph.', ''));
-      const known = types.map((t) => AUTH_METHOD_TYPES[t]).filter(Boolean);
-      byUserId.set(result.userId, {
-        isMfaRegistered: known.some((m) => m.mfa),
-        methodsRegistered: known.map((m) => m.label),
-      });
-      return null;
-    }
-    return result;
+  const markResolved = (n = 1) => {
+    resolved += n;
+    onProgress?.(resolved, total);
   };
 
-  // Un usuario cuyo sub-request fue throttled (429) se reintenta aparte.
+  const throttle = (retryAfter) => {
+    pauseUntil = Math.max(pauseUntil, Date.now() + retryAfter);
+    concurrency = Math.max(1, concurrency - 1);
+    calmBatches = 0;
+  };
+
+  // Procesa un lote; devuelve los usuarios que hay que reintentar (limitados por 429).
   async function runBatch(batch) {
-    let pending = batch;
-    for (let attempt = 1; pending.length; attempt += 1) {
-      const results = await postAuthMethodsBatch(accessToken, pending);
-      const notOk = results.map(record).filter(Boolean);
-      const throttled = notOk.filter((r) => r.status === 429);
-      const failed = notOk.filter((r) => r.status !== 429);
-      for (const f of failed) {
-        failedCount += 1;
-        sampleError ??= f.body?.error?.message ?? `HTTP ${f.status}`;
+    let results;
+    try {
+      results = await postAuthMethodsBatch(accessToken, batch);
+    } catch (err) {
+      if (err instanceof BatchThrottledError) {
+        throttle(err.retryAfter);
+        return { retry: batch, failed: [] };
       }
-      if (!throttled.length) return notOk;
-      if (attempt >= MAX_RETRIES) {
-        for (const t of throttled) {
-          failedCount += 1;
-          sampleError ??= 'Microsoft Graph limitó la tasa de consultas (429) y se agotaron los reintentos';
-        }
-        return notOk;
-      }
-      await sleep(Math.max(...throttled.map((t) => retryAfterMs(t.headers, attempt))));
-      pending = throttled.map((t) => t.userId);
+      throw err;
     }
-    return [];
+
+    const retry = [];
+    const failed = [];
+    let retryAfter = 0;
+    for (const r of results) {
+      if (r.status === 200) {
+        const types = (r.body?.value ?? []).map((m) => String(m['@odata.type'] ?? '').replace('#microsoft.graph.', ''));
+        const known = types.map((t) => AUTH_METHOD_TYPES[t]).filter(Boolean);
+        byUserId.set(r.userId, { isMfaRegistered: known.some((m) => m.mfa), methodsRegistered: known.map((m) => m.label) });
+        markResolved();
+      } else if (r.status === 429) {
+        retry.push(r.userId);
+        retryAfter = Math.max(retryAfter, retryAfterMs(r.headers, 5000));
+      } else {
+        failed.push(r);
+        failedCount += 1;
+        sampleError ??= r.body?.error?.message ?? `HTTP ${r.status}`;
+        markResolved();
+      }
+    }
+
+    if (retry.length) throttle(retryAfter);
+    else if (++calmBatches >= 5) {
+      concurrency = Math.min(MAX_CONCURRENCY, concurrency + 1);
+      calmBatches = 0;
+    }
+    return { retry, failed };
   }
 
-  if (!batches.length) return { byUserId, failedCount, sampleError };
+  const pastDeadline = () => Boolean(deadlineAt) && Date.now() >= deadlineAt;
+
+  // Corre una lista de lotes con concurrencia dinámica y pausa global.
+  // Devuelve los usuarios a reintentar (429) y los que no llegaron por la fecha límite.
+  async function runBatches(batches) {
+    const toRetry = [];
+    let next = 0;
+    let active = 0;
+
+    await new Promise((resolve, reject) => {
+      let failedWith = null;
+      const pump = async () => {
+        while (!failedWith && next < batches.length && !pastDeadline()) {
+          if (active >= concurrency || Date.now() < pauseUntil) {
+            await sleep(Math.max(100, Math.min(pauseUntil - Date.now(), 1000)));
+            continue;
+          }
+          const batch = batches[next];
+          next += 1;
+          active += 1;
+          runBatch(batch)
+            .then(({ retry }) => toRetry.push(...retry))
+            .catch((err) => {
+              failedWith ??= err;
+            })
+            .finally(() => {
+              active -= 1;
+            });
+        }
+        while (active > 0) await sleep(50);
+        if (failedWith) reject(failedWith);
+        else resolve();
+      };
+      pump().catch(reject);
+    });
+    return { retry: toRetry, skipped: batches.slice(next).flat() };
+  }
+
+  const chunk = (ids) => {
+    const out = [];
+    for (let i = 0; i < ids.length; i += BATCH_SIZE) out.push(ids.slice(i, i + BATCH_SIZE));
+    return out;
+  };
+
+  if (!total) return { byUserId, failedCount, skippedCount: 0, sampleError };
+  onProgress?.(0, total);
 
   // El primer lote va SOLO: si todo da 403 es que falta el permiso de
-  // aplicación — se corta enseguida en vez de repetir el error 3.500 veces.
-  const firstFailures = await runBatch(batches[0]);
-  if (firstFailures.length === batches[0].length && firstFailures.every((r) => r.status === 403)) {
+  // aplicación — se corta enseguida en vez de repetir el error miles de veces.
+  const [firstBatch, ...restOfFirstRound] = chunk(userIds);
+  const first = await runBatch(firstBatch);
+  if (first.failed.length === firstBatch.length && first.failed.every((r) => r.status === 403)) {
     throw new GraphApiError(
       'Microsoft Graph rechazó la lectura de métodos de autenticación (403) — falta el permiso de aplicación "UserAuthenticationMethod.Read.All" con consentimiento de administrador en la app de Azure AD.'
     );
   }
 
-  let next = 1;
-  const workers = Array.from({ length: Math.min(BATCH_CONCURRENCY, batches.length - 1) }, async () => {
-    while (next < batches.length) {
-      const batch = batches[next];
-      next += 1;
-      await runBatch(batch);
-    }
-  });
-  await Promise.all(workers);
+  const firstRound = await runBatches(restOfFirstRound);
+  let pending = [...first.retry, ...firstRound.retry];
+  const skipped = [...firstRound.skipped];
+  for (let round = 1; pending.length && round <= MAX_ROUNDS && !pastDeadline(); round += 1) {
+    await sleep(Math.max(0, Math.min(pauseUntil, deadlineAt ?? Infinity) - Date.now()));
+    const result = await runBatches(chunk(pending));
+    pending = result.retry;
+    skipped.push(...result.skipped);
+  }
 
-  return { byUserId, failedCount, sampleError };
+  // Lo que quedó limitado o sin consultar NO es una falla: conserva su dato
+  // anterior y se vuelve a intentar en la próxima sincronización.
+  return { byUserId, failedCount, skippedCount: skipped.length + pending.length, sampleError };
 }

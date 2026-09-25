@@ -10,6 +10,25 @@ esas, ver `git log`.
 
 ### Corregido
 
+- **Microsoft 365 → "Sincronizar ahora" fallaba con "Respuesta del servidor
+  no válida"**: con el permiso de MFA por usuario, la sincronización tarda
+  más de 5 minutos (Microsoft limita esa API a ~2-3 usuarios/s), nginx cortaba
+  la petición a los 300 s (504 con HTML, que el navegador no puede
+  interpretar) aunque el backend terminara. Ahora la sincronización de M365
+  corre **en segundo plano** (`jobs/syncRunner.js`; `POST /m365/sync` responde
+  202 al instante y `GET /m365/sync/status` informa el estado): el botón
+  muestra el avance, sobrevive a recargar la página y no se pisa con la
+  sincronización automática. Además la lectura de MFA es **incremental** (solo
+  usuarios nunca leídos o con dato de más de 12 h, con tope de ~10 min por
+  corrida; `m365_users.mfa_checked_at`) y **respeta el límite de Microsoft**
+  (pausa global con `Retry-After` y concurrencia adaptativa en vez de
+  insistir, que antes dejaba cientos de usuarios sin dato). Ver
+  `docs/microsoft-365.md`.
+- **Pantallas de configuración (AD, M365, Veeam, PAM360, Vulnerabilidades)**:
+  desde el refactor de `SyncSection` el cuadro con el resultado de la
+  sincronización desaparecía al terminar (solo quedaba el aviso emergente),
+  porque refrescar los datos volvía a mostrar "Cargando…" y desmontaba el
+  bloque. `useSettings` ahora solo muestra "Cargando…" en la primera carga.
 - **Botón "Copiar" del enlace de "Compartir" y de la Bóveda**: siempre daba
   "No se pudo copiar". Causa: `navigator.clipboard` solo existe en contextos
   seguros (HTTPS o `localhost`) y el panel se sirve por HTTP en la red

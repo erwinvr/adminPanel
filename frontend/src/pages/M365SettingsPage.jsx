@@ -118,6 +118,8 @@ export function M365SettingsPage() {
             canSync={settings.hasSecret}
             missingCredentialMessage="Guardá la configuración con un client secret antes de poder sincronizar."
             onSync={m365Service.sync}
+            getSyncStatus={m365Service.getSyncStatus}
+            progressLabel={(p) => (p.phase === 'mfa' ? `(leyendo MFA: ${p.done} de ${p.total} usuarios)` : '')}
             summarize={(r) => ({
               message: `Sincronización exitosa: ${r.licensesCount} licencias y ${r.usersCount} usuarios traídos desde Microsoft 365${r.ignoredUsersCount ? ` (${r.ignoredUsersCount} ignorados por el filtro de dominios)` : ''}.`,
               toast: `Sincronizado: ${r.licensesCount} licencias, ${r.usersCount} usuarios`,

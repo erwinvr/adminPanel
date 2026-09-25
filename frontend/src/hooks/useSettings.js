@@ -7,18 +7,24 @@
  * Vulnerabilidades.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 export function useSettings(getSettings) {
   const [settings, setSettings] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // "Cargando…" solo en la PRIMERA carga. Los refrescos posteriores (después de
+  // guardar o sincronizar) mantienen la pantalla montada: si no, el bloque de
+  // sincronización se desmontaba y perdía el resultado recién mostrado.
+  const hasLoaded = useRef(false);
+
   const refresh = useCallback(async () => {
-    setLoading(true);
+    if (!hasLoaded.current) setLoading(true);
     setError(null);
     try {
       setSettings(await getSettings());
+      hasLoaded.current = true;
     } catch (err) {
       setError(err.message);
     } finally {

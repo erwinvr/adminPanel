@@ -21,6 +21,7 @@ router.patch(
 );
 
 router.post('/sync', requirePermission(PERMISSIONS.M365_EDIT), asyncHandler(m365Controller.sync));
+router.get('/sync/status', requirePermission(PERMISSIONS.M365_EDIT), asyncHandler(m365Controller.getSyncStatus));
 
 router.get('/licenses', requirePermission(PERMISSIONS.M365_VIEW), asyncHandler(m365Controller.listLicenses));
 

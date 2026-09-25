@@ -33,6 +33,29 @@ El sync intenta dos caminos, en este orden:
 Sin licencia P1/P2 se usa automáticamente el camino 2; solo hace falta
 agregar `UserAuthenticationMethod.Read.All`.
 
+### El camino 2 es lento y por eso es incremental y en segundo plano
+
+Microsoft limita la tasa de esta API a unos **2-3 usuarios por segundo**
+sostenidos (mucho más bajo que el resto de Graph): leer el MFA de 3.300
+usuarios lleva ~20 minutos por más que se optimice. Por eso:
+
+- **Incremental**: cada sincronización solo consulta a los usuarios cuyo MFA
+  **nunca se leyó o tiene más de 12 horas** (los más antiguos primero); el
+  resto conserva el dato anterior. Con la lista al día, una sincronización
+  tarda segundos.
+- **Con tope de tiempo**: la lectura de MFA usa como máximo ~10 minutos por
+  sincronización. Si quedan usuarios sin revisar, se completan en las
+  siguientes (el resultado lo avisa: *"MFA actualizado para X de Y…"*). La
+  primera sincronización de un tenant grande puede necesitar 2-3 corridas.
+- **En segundo plano**: "Sincronizar ahora" no espera la respuesta (una
+  petición HTTP no puede durar minutos: nginx la corta y el navegador
+  mostraba *"Respuesta del servidor no válida"*). El botón muestra el avance
+  ("leyendo MFA: 1.200 de 3.284 usuarios"), sigue funcionando si se recarga
+  la página y no se puede lanzar dos veces a la vez (tampoco se pisa con la
+  sincronización automática). El estado vive en memoria: si el backend se
+  reinicia a mitad de una corrida se pierde el avance (el resultado igual
+  queda en Auditoría → Microsoft 365).
+
 ## Qué significa "MFA registrado" (camino 2)
 
 El usuario tiene registrado al menos un método de segundo factor:

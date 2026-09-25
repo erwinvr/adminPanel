@@ -25,6 +25,11 @@ import { countDomains, filterUsersByDomain } from '../integrations/microsoft365/
 import { recordEvent } from '../audit/audit.service.js';
 import { ValidationError } from '../errors/AppError.js';
 
+// MFA por usuario (API limitada por Microsoft): un dato se considera vigente 12 h y cada
+// sincronización dedica como máximo 10 min a leer MFA — ver el comentario en sync().
+const MFA_STALE_AFTER_MS = 12 * 60 * 60 * 1000;
+const MFA_TIME_BUDGET_MS = 10 * 60 * 1000;
+
 // Minúsculas y sin tildes (el SQL hace lo mismo con unaccent(lower(...))).
 function normalizeSearchText(text) {
   return (text ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -92,7 +97,9 @@ export const m365Service = {
 
   // `req` es null cuando lo dispara el job automático (jobs/syncScheduler.js)
   // en vez del botón "Sincronizar ahora" — sin sesión de usuario.
-  async sync(req = null) {
+  // `onProgress({ phase, done, total })` informa el avance a quien lo pidió (la
+  // ejecución en segundo plano del botón, ver jobs/syncRunner.js).
+  async sync(req = null, { onProgress } = {}) {
     const settingsRow = await m365Repository.getSettings();
     if (!settingsRow?.tenant_id || !settingsRow?.client_id || !settingsRow?.client_secret_encrypted) {
       throw new ValidationError('Configurá el tenant, el client ID y el client secret antes de sincronizar');
@@ -108,7 +115,7 @@ export const m365Service = {
     let ignoredUsersCount = 0;
     let mfaWarning = null;
     let mfaSource = null;
-    // userId → { isMfaRegistered, isMfaCapable, methodsRegistered }
+    // userId → { isMfaRegistered, isMfaCapable, methodsRegistered, checkedAt }
     let mfaByUserId = new Map();
     try {
       const accessToken = await getAccessToken({ tenantId: settingsRow.tenant_id, clientId: settingsRow.client_id, clientSecret });
@@ -132,21 +139,55 @@ export const m365Service = {
         mfaByUserId = new Map(
           registrationDetails.map((r) => [
             r.id,
-            { isMfaRegistered: r.isMfaRegistered, isMfaCapable: r.isMfaCapable, methodsRegistered: r.methodsRegistered ?? [] },
+            { isMfaRegistered: r.isMfaRegistered, isMfaCapable: r.isMfaCapable, methodsRegistered: r.methodsRegistered ?? [], checkedAt: new Date() },
           ])
         );
         mfaSource = 'registrationReport';
       } catch (reportErr) {
         try {
-          // Una cuenta deshabilitada no puede iniciar sesión — no vale la
-          // pena una consulta por cada una (en tenants grandes son miles).
+          // Microsoft limita la tasa de esta API (~2-3 usuarios/s): leer a todos
+          // lleva ~20 minutos con 3.300 usuarios. Por eso es INCREMENTAL: solo se
+          // consulta a quien nunca se leyó o tiene el dato viejo (más antiguos
+          // primero), con un tope de tiempo; el resto conserva su dato anterior
+          // y se completa en las próximas sincronizaciones. Una cuenta
+          // deshabilitada no puede iniciar sesión — no se consulta.
+          const previousMfa = await m365Repository.getMfaSnapshot();
+          const staleBefore = Date.now() - MFA_STALE_AFTER_MS;
+          const checkedAtOf = (id) => (previousMfa.get(id)?.checkedAt ? new Date(previousMfa.get(id).checkedAt).getTime() : 0);
           const enabledIds = graphUsers.filter((u) => u.accountEnabled !== false).map((u) => u.id);
-          const { byUserId, failedCount, sampleError } = await fetchUsersAuthMethods(accessToken, enabledIds);
-          mfaByUserId = new Map([...byUserId].map(([id, m]) => [id, { ...m, isMfaCapable: null }]));
-          mfaSource = 'authenticationMethods';
-          if (failedCount > 0) {
-            mfaWarning = `No se pudo leer el MFA de ${failedCount} de ${enabledIds.length} usuarios habilitados (quedan "Sin datos"): ${sampleError}`;
+          const toCheck = enabledIds.filter((id) => checkedAtOf(id) < staleBefore).sort((a, b) => checkedAtOf(a) - checkedAtOf(b));
+
+          const { byUserId, failedCount, skippedCount, sampleError } = await fetchUsersAuthMethods(accessToken, toCheck, {
+            onProgress: (done, total) => onProgress?.({ phase: 'mfa', done, total }),
+            deadlineAt: Date.now() + MFA_TIME_BUDGET_MS,
+          });
+
+          const checkedAt = new Date();
+          mfaByUserId = new Map();
+          for (const u of graphUsers) {
+            const fresh = byUserId.get(u.id);
+            const previous = previousMfa.get(u.id);
+            if (fresh) mfaByUserId.set(u.id, { ...fresh, isMfaCapable: null, checkedAt });
+            else if (previous?.isMfaRegistered != null) {
+              mfaByUserId.set(u.id, {
+                isMfaRegistered: previous.isMfaRegistered,
+                isMfaCapable: null,
+                methodsRegistered: previous.methodsRegistered ?? [],
+                checkedAt: previous.checkedAt,
+              });
+            }
           }
+          mfaSource = 'authenticationMethods';
+
+          const notes = [];
+          if (failedCount > 0) notes.push(`No se pudo leer el MFA de ${failedCount} usuarios (conservan su dato anterior o quedan "Sin datos"): ${sampleError}.`);
+          if (skippedCount > 0) {
+            notes.push(
+              `MFA actualizado para ${byUserId.size} de ${toCheck.length} usuarios que tocaba revisar; ${skippedCount} quedan para la próxima sincronización ` +
+                '(Microsoft limita las consultas de MFA a pocos usuarios por segundo, por eso se lee de a partes y conservan su dato anterior mientras tanto).'
+            );
+          }
+          if (notes.length) mfaWarning = notes.join(' ');
         } catch (methodsErr) {
           mfaWarning =
             `No se pudieron obtener datos de MFA. ` +
@@ -184,6 +225,7 @@ export const m365Service = {
         is_mfa_registered: mfa ? mfa.isMfaRegistered : null,
         is_mfa_capable: mfa ? mfa.isMfaCapable : null,
         methods_registered: mfa ? JSON.stringify(mfa.methodsRegistered) : null,
+        mfa_checked_at: mfa ? mfa.checkedAt : null,
       };
     });
 

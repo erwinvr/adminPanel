@@ -36,6 +36,7 @@ import { backupService } from '../services/backup.service.js';
 import { netbackupService } from '../services/netbackup.service.js';
 import { pam360Service } from '../services/pam360.service.js';
 import { logger } from '../config/logger.js';
+import { runTracked, isSyncRunning } from './syncRunner.js';
 
 const TICK_MS = 60 * 1000; // revisa cada minuto si algo ya venció su intervalo
 
@@ -61,7 +62,7 @@ function isDue(intervalMinutes, lastRunAt) {
 }
 
 async function checkAndRun(key, getSettings, runSync) {
-  if (running.has(key)) return;
+  if (running.has(key) || isSyncRunning(key)) return; // en curso (automática o disparada a mano)
 
   const settingsRow = await getSettings();
   const lastAttempt = lastAttemptAt.get(key);
@@ -72,7 +73,7 @@ async function checkAndRun(key, getSettings, runSync) {
   lastAttemptAt.set(key, Date.now());
   try {
     logger.info(`[sync-scheduler] Disparando sincronización automática de ${key}`);
-    await runSync();
+    await runTracked(key, runSync);
   } catch (err) {
     // El propio sync() ya audita el fallo (recordEvent con result:
     // 'failure') — acá solo se loguea para que quede en los logs del

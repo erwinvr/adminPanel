@@ -31,6 +31,17 @@ export const m365Repository = {
     });
   },
 
+  /** Último MFA leído de cada usuario, para conservarlo en la próxima foto (el sync reemplaza la tabla). */
+  async getMfaSnapshot() {
+    const rows = await db('m365_users').select('aad_object_id', 'is_mfa_registered', 'methods_registered', 'mfa_checked_at');
+    return new Map(
+      rows.map((r) => [
+        r.aad_object_id,
+        { isMfaRegistered: r.is_mfa_registered, methodsRegistered: r.methods_registered, checkedAt: r.mfa_checked_at },
+      ])
+    );
+  },
+
   listLicenses() {
     return db('m365_licenses')
       .select(
@@ -129,7 +140,8 @@ export const m365Repository = {
         db.raw('count(*) as total'),
         db.raw('count(*) filter (where is_mfa_registered = false) as "withoutMfa"'),
         db.raw('count(*) filter (where is_mfa_capable = false) as "notMfaCapable"'),
-        db.raw('count(is_mfa_capable) as "withCapableData"')
+        db.raw('count(is_mfa_capable) as "withCapableData"'),
+        db.raw('count(is_mfa_registered) as "withMfaData"')
       )
       .first();
     return {
@@ -137,6 +149,7 @@ export const m365Repository = {
       withoutMfa: Number(row.withoutMfa),
       notMfaCapable: Number(row.notMfaCapable),
       hasCapableData: Number(row.withCapableData) > 0,
+      withMfaData: Number(row.withMfaData),
     };
   },
 };
