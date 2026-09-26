@@ -10,5 +10,6 @@ export const m365Service = {
     const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v !== undefined && v !== ''));
     return httpClient.getWithMeta(`/m365/users?${qs.toString()}`);
   },
+  getServicesUsage: () => httpClient.get('/m365/services-usage'),
   getUsersSummary: () => httpClient.get('/m365/users/summary'),
 };

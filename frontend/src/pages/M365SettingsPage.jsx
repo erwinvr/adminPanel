@@ -123,7 +123,7 @@ export function M365SettingsPage() {
             summarize={(r) => ({
               message: `Sincronización exitosa: ${r.licensesCount} licencias y ${r.usersCount} usuarios traídos desde Microsoft 365${r.ignoredUsersCount ? ` (${r.ignoredUsersCount} ignorados por el filtro de dominios)` : ''}.`,
               toast: `Sincronizado: ${r.licensesCount} licencias, ${r.usersCount} usuarios`,
-              extraWarning: r.mfaWarning,
+              extraWarning: [r.mfaWarning, r.usageReportsWarning].filter(Boolean).join(' ') || undefined,
             })}
             onSynced={refresh}
           />

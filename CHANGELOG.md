@@ -81,14 +81,22 @@ esas, ver `git log`.
 
 ### Agregado
 
-- **Roles y permisos → crear/editar rol**: buscador en la lista de permisos
-  (39 hoy) que filtra por código o descripción, sin distinguir mayúsculas ni
-  tildes, con contador "N de 39 · M seleccionados". La selección no se pierde
-  al filtrar, y Enter en el buscador no envía el formulario. Es una opción
-  genérica del campo `checkbox-group` (`searchable: true`) del componente `Form`.
-- **Microsoft 365 → Licencias compradas**: buscador por nombre de licencia
-  o SKU (sin distinguir mayúsculas ni tildes; varios términos = todos deben
-  coincidir), con contador de resultados.
+- **Dashboard → Servicios M365**: página nueva con el uso de **correo,
+  OneDrive, SharePoint y Teams** de Microsoft 365, con totales y un top 10 de
+  cada uno: los usuarios con el buzón más lleno y con el OneDrive más
+  utilizado (usado, cuota/asignado, % usado con colores de estado), los sitios
+  de SharePoint con más almacenamiento (y cuántos llevan más de 180 días sin
+  actividad) y, en Teams, equipos públicos/privados, usuarios activos,
+  mensajes, reuniones, llamadas y los usuarios y equipos más activos de los
+  últimos 30 días. Usa los informes de uso de Microsoft Graph (permiso
+  `Reports.Read.All`, sin licencia adicional), que Microsoft actualiza una vez
+  por día y con atraso — cada tarjeta muestra la fecha del informe. Se
+  refrescan como máximo cada 6 h dentro de la sincronización de M365, cada
+  informe por separado (si uno falla —ej. el de equipos, que solo existe en la
+  API *beta*— los demás se guardan y la sincronización sigue), y se pueden
+  **compartir** con enlace público. Ver `docs/microsoft-365.md`. También: el
+  encabezado de las páginas con botón "Compartir" quedaba pegado al texto de
+  ayuda.
 - **Microsoft 365 → MFA de usuarios**: filtro por estado de MFA — *Todos*,
   *Solo con MFA registrado*, *Solo sin MFA registrado* y *Sin datos de MFA*
   (cuentas deshabilitadas o aún no leídas). Se resuelve en el servidor

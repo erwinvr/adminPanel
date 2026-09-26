@@ -16,6 +16,7 @@
  */
 
 import { AppError } from '../../errors/AppError.js';
+import { parseCsv } from './csv.js';
 
 const GRAPH_BASE_URL = 'https://graph.microsoft.com/v1.0';
 const GRAPH_SCOPE = 'https://graph.microsoft.com/.default';
@@ -319,4 +320,140 @@ export async function fetchUsersAuthMethods(accessToken, userIds, { onProgress, 
   // Lo que quedó limitado o sin consultar NO es una falla: conserva su dato
   // anterior y se vuelve a intentar en la próxima sincronización.
   return { byUserId, failedCount, skippedCount: skipped.length + pending.length, sampleError };
+}
+
+/**
+ * Informe de uso de Microsoft 365 (`/reports/<nombre>(period='D7')`) →
+ * filas del CSV. Requiere el permiso de aplicación `Reports.Read.All` (sin
+ * licencia adicional). Graph responde 302 a un CSV ya autenticado que `fetch`
+ * sigue solo. Los datos los refresca Microsoft una vez por día, con 1-7 días
+ * de atraso (la columna "Report Refresh Date" dice a qué fecha corresponden).
+ */
+async function fetchUsageReport(accessToken, reportName, period = 'D7') {
+  // Graph genera estos CSV al vuelo y a veces responde "Please retry later" (429/5xx transitorio):
+  // se reintenta con espera creciente antes de rendirse.
+  let response;
+  for (let attempt = 1; ; attempt += 1) {
+    response = await fetch(`${GRAPH_BASE_URL}/reports/${reportName}(period='${period}')`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (![429, 500, 502, 503, 504].includes(response.status) || attempt >= 4) break;
+    await sleep(retryAfterMs({ 'Retry-After': response.headers.get('retry-after') }, attempt * 3000));
+  }
+  if (response.status === 403) {
+    throw new GraphApiError('Microsoft Graph rechazó la lectura de informes de uso (403) — falta el permiso de aplicación "Reports.Read.All" con consentimiento de administrador en la app de Azure AD.');
+  }
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw new GraphApiError('Microsoft Graph respondió con un error: ' + (payload?.error?.message ?? `HTTP ${response.status}`));
+  }
+  return parseCsv(await response.text());
+}
+
+const toNumber = (value) => (value === '' || value == null || Number.isNaN(Number(value)) ? null : Number(value));
+const toDate = (value) => (/^\d{4}-\d{2}-\d{2}$/.test(value ?? '') ? value : null);
+
+/** Uso de cada buzón (sin los eliminados): espacio usado, cuota y elementos. */
+export async function fetchMailboxUsage(accessToken) {
+  const rows = await fetchUsageReport(accessToken, 'getMailboxUsageDetail');
+  return rows
+    .filter((r) => r['Is Deleted'] !== 'True')
+    .map((r) => ({
+      userPrincipalName: r['User Principal Name'],
+      displayName: r['Display Name'],
+      storageUsedBytes: toNumber(r['Storage Used (Byte)']) ?? 0,
+      quotaBytes: toNumber(r['Prohibit Send/Receive Quota (Byte)']),
+      itemCount: toNumber(r['Item Count']),
+      hasArchive: r['Has Archive'] === 'True',
+      lastActivityDate: toDate(r['Last Activity Date']),
+      reportDate: toDate(r['Report Refresh Date']),
+    }));
+}
+
+/** Uso de cada OneDrive (sin los eliminados): espacio usado, asignado y archivos. */
+export async function fetchOneDriveUsage(accessToken) {
+  const rows = await fetchUsageReport(accessToken, 'getOneDriveUsageAccountDetail');
+  return rows
+    .filter((r) => r['Is Deleted'] !== 'True')
+    .map((r) => ({
+      userPrincipalName: r['Owner Principal Name'],
+      displayName: r['Owner Display Name'],
+      storageUsedBytes: toNumber(r['Storage Used (Byte)']) ?? 0,
+      storageAllocatedBytes: toNumber(r['Storage Allocated (Byte)']),
+      fileCount: toNumber(r['File Count']),
+      lastActivityDate: toDate(r['Last Activity Date']),
+      reportDate: toDate(r['Report Refresh Date']),
+    }));
+}
+
+/** Uso de cada sitio de SharePoint (sin los eliminados): almacenamiento, archivos y actividad. */
+export async function fetchSharePointSites(accessToken) {
+  const rows = await fetchUsageReport(accessToken, 'getSharePointSiteUsageDetail');
+  return rows
+    .filter((r) => r['Is Deleted'] !== 'True')
+    .map((r) => ({
+      siteId: r['Site Id'],
+      siteUrl: r['Site URL'] || null,
+      ownerDisplayName: r['Owner Display Name'],
+      ownerPrincipalName: r['Owner Principal Name'] || null,
+      rootWebTemplate: r['Root Web Template'] || null,
+      storageUsedBytes: toNumber(r['Storage Used (Byte)']) ?? 0,
+      storageAllocatedBytes: toNumber(r['Storage Allocated (Byte)']),
+      fileCount: toNumber(r['File Count']),
+      pageViewCount: toNumber(r['Page View Count']),
+      lastActivityDate: toDate(r['Last Activity Date']),
+      reportDate: toDate(r['Report Refresh Date']),
+    }));
+}
+
+/** Actividad de Teams de cada usuario en los últimos 30 días (mensajes, llamadas y reuniones). */
+export async function fetchTeamsUserActivity(accessToken) {
+  const rows = await fetchUsageReport(accessToken, 'getTeamsUserActivityUserDetail', 'D30');
+  return rows
+    .filter((r) => r['Is Deleted'] !== 'True')
+    .map((r) => ({
+      userPrincipalName: r['User Principal Name'],
+      teamChatMessages: toNumber(r['Team Chat Message Count']) ?? 0,
+      privateChatMessages: toNumber(r['Private Chat Message Count']) ?? 0,
+      calls: toNumber(r['Call Count']) ?? 0,
+      meetings: toNumber(r['Meeting Count']) ?? 0,
+      lastActivityDate: toDate(r['Last Activity Date']),
+      reportDate: toDate(r['Report Refresh Date']),
+    }));
+}
+
+/**
+ * Actividad de cada EQUIPO de Teams (públicos/privados, usuarios activos,
+ * mensajes, reuniones, invitados) de los últimos 30 días (en 7 días casi ningún equipo
+ * registra actividad y el ranking no dice nada). Este informe solo existe en la API BETA de
+ * Graph (no hay equivalente en v1.0 sin el permiso Group.Read.All) y viene
+ * como JSON paginado: quien lo llame debe tolerar que falle o cambie sin
+ * afectar al resto de los informes.
+ */
+export async function fetchTeamsActivity(accessToken) {
+  const teams = [];
+  let url = "https://graph.microsoft.com/beta/reports/getTeamsTeamActivityDetail(period='D30')";
+  for (let page = 0; url && page < 50; page += 1) {
+    const response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) throw new GraphApiError('Microsoft Graph respondió con un error: ' + (payload?.error?.message ?? `HTTP ${response.status}`));
+    teams.push(...(payload.value ?? []));
+    url = payload['@odata.nextLink'] ?? null;
+  }
+  return teams
+    .filter((t) => !t.isDeleted)
+    .map((t) => {
+      const d = t.details?.[0] ?? {};
+      return {
+        teamId: t.teamId,
+        teamName: t.teamName,
+        teamType: t.teamType ?? null,
+        activeUsers: d.activeUsers ?? 0,
+        channelMessages: (d.postMessages ?? 0) + (d.replyMessages ?? 0),
+        meetingsOrganized: d.meetingsOrganized ?? 0,
+        guests: d.guests ?? 0,
+        lastActivityDate: toDate(t.lastActivityDate),
+        reportDate: toDate(t.reportRefreshDate),
+      };
+    });
 }

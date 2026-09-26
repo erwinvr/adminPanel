@@ -35,6 +35,7 @@ import { M365SettingsPage } from './pages/M365SettingsPage.jsx';
 import { M365LicensesPage } from './pages/M365LicensesPage.jsx';
 import { M365UsersPage } from './pages/M365UsersPage.jsx';
 import { M365MfaPage } from './pages/M365MfaPage.jsx';
+import { M365ServicesPage } from './pages/M365ServicesPage.jsx';
 import { BackupSettingsPage } from './pages/BackupSettingsPage.jsx';
 import { BackupDashboardPage } from './pages/BackupDashboardPage.jsx';
 import { VulnSettingsPage } from './pages/VulnSettingsPage.jsx';
@@ -333,6 +334,14 @@ export function App() {
         element={
           <ProtectedRoute permission={PERMISSIONS.SMTP_EDIT}>
             <SmtpSettingsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/dashboard/m365-services"
+        element={
+          <ProtectedRoute permission={PERMISSIONS.M365_VIEW}>
+            <M365ServicesPage />
           </ProtectedRoute>
         }
       />

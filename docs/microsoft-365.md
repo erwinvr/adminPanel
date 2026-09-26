@@ -12,6 +12,7 @@ administrador (`backend/src/integrations/microsoft365/graphClient.js`).
 | `User.Read.All` | Usuarios y licencias asignadas | — |
 | `UserAuthenticationMethod.Read.All` | **Estado de MFA** (métodos registrados por usuario) | **Ninguna adicional** |
 | `AuditLog.Read.All` | Estado de MFA vía reporte de registro | Entra ID P1/P2 |
+| `Reports.Read.All` | Dashboard **Servicios M365** (uso de buzones y de OneDrive) | Ninguna adicional |
 
 Después de agregar un permiso hay que **otorgar el consentimiento de
 administrador** (Azure Portal → App registrations → API permissions →
@@ -104,3 +105,57 @@ la lista **vacía** se admiten todos (comportamiento anterior).
 - Las **licencias compradas** (SKUs y unidades consumidas) son del tenant
   completo y no se filtran: las unidades consumidas siguen contando también
   a los usuarios ignorados.
+
+## Dashboard "Servicios M365" (correo, OneDrive, SharePoint y Teams)
+
+*Dashboard → Servicios M365* muestra, con totales del tenant y un top 10 de
+cada uno:
+
+- **Correo**: los 10 usuarios con el buzón más lleno (usado, cuota, % usado).
+- **OneDrive**: los 10 usuarios con el OneDrive más utilizado.
+- **SharePoint**: sitios, almacenamiento y archivos totales, sitios sin
+  actividad hace más de 180 días, y los 10 sitios con más almacenamiento. Los
+  sitios de grupo se identifican por el nombre de su propietario (Microsoft
+  suele devolver la URL vacía).
+- **Teams** (últimos 30 días): cantidad de equipos (públicos/privados) y
+  equipos con actividad, usuarios activos, mensajes/reuniones/llamadas, los 10
+  usuarios más activos y los 10 equipos con más usuarios activos.
+
+Sale de los informes de uso de Microsoft Graph (`getMailboxUsageDetail`,
+`getOneDriveUsageAccountDetail`, `getSharePointSiteUsageDetail`,
+`getTeamsUserActivityUserDetail` y `getTeamsTeamActivityDetail`), que
+requieren el permiso de aplicación **`Reports.Read.All`** con consentimiento
+de administrador (sin licencia adicional).
+
+- **No es un dato en vivo.** Microsoft actualiza esos informes una vez por
+  día y con atraso (buzones y equipos de Teams pueden tener ~1 semana; los
+  demás 1-2 días); cada tarjeta indica la fecha del informe. Se bajan como
+  máximo cada 6 horas, como parte de la sincronización (manual o automática),
+  y se guardan en `m365_mailbox_usage`, `m365_onedrive_usage`,
+  `m365_sharepoint_sites`, `m365_teams_user_activity` y `m365_teams` (foto
+  reemplazada en cada descarga). Bajarlos puede tardar ~1 minuto: Graph los
+  genera al vuelo y a veces responde "Please retry later" (se reintenta).
+- **Los equipos de Teams usan la API *beta* de Graph.** Microsoft no ofrece el
+  informe por equipo en v1.0 (la alternativa, listar los grupos, exige el
+  permiso `Group.Read.All`). Es opcional: si Microsoft cambia o retira ese
+  informe, el resto del dashboard sigue funcionando, se avisa en pantalla y
+  los equipos conservan su última foto.
+- **Cada informe es independiente**: si uno falla, los demás se guardan igual
+  y el que falló conserva su última foto (la sincronización nunca falla por
+  esto).
+- **Barras** de almacenamiento: verde < 75 %, amarillo ≥ 75 %, rojo ≥ 90 % de
+  la cuota del buzón / del espacio asignado.
+- El **filtro de dominios** de la configuración se aplica a los informes por
+  *usuario* (buzones, OneDrive y actividad de Teams), no a sitios de
+  SharePoint ni a equipos, cuyo propietario suele ser un grupo. Las cuentas
+  eliminadas no se incluyen.
+- **Nombres ocultos**: en el centro de administración de Microsoft 365
+  (*Configuración → Configuración de la organización → Informes*) la casilla
+  *"Mostrar nombres de usuario, grupo y sitio ocultos en todos los informes"*
+  controla si los informes traen correos o identificadores. Si está
+  **desmarcada**, los informes traen identificadores en vez de correos y el
+  dashboard lo avisa; hay que marcarla. (En tu tenant ya está marcada: los
+  informes traen los nombres reales.)
+- Se puede **compartir** con un enlace público como el resto de los
+  dashboards (mismo permiso `m365.view`); el visitante ve nombres, correos y
+  uso de esos usuarios, sitios y equipos.

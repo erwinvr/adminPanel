@@ -470,7 +470,7 @@ export function TopologyPage() {
 
   return (
     <Layout>
-      <div className="flex items-start justify-between gap-4">
+      <div className="mb-2 flex items-start justify-between gap-4">
         <h1 className="text-2xl font-semibold">Mapa de Aplicaciones</h1>
         <Button type="button" variant="outline" size="sm" onClick={() => setShareOpen(true)}>
           <Share2 className="size-4" />

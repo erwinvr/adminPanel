@@ -58,6 +58,7 @@ const DASHBOARD_ITEMS = [
   { path: '/backups/dashboard', label: 'Backups', permission: PERMISSIONS.BACKUPS_VIEW, icon: HardDrive },
   { path: '/vuln/dashboard', label: 'Vulnerabilidades', permission: PERMISSIONS.VULN_VIEW, icon: ShieldAlert },
   { path: '/network-topology', label: 'Topología de Red', permission: PERMISSIONS.NETWORK_TOPOLOGY_VIEW, icon: Router },
+  { path: '/dashboard/m365-services', label: 'Servicios M365', permission: PERMISSIONS.M365_VIEW, icon: Cloud },
 ];
 
 const MANAGEMENT_SECTIONS = [

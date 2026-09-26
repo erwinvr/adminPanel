@@ -19,6 +19,11 @@ import {
   fetchUsersWithLicenses,
   fetchUserRegistrationDetails,
   fetchUsersAuthMethods,
+  fetchMailboxUsage,
+  fetchOneDriveUsage,
+  fetchSharePointSites,
+  fetchTeamsUserActivity,
+  fetchTeamsActivity,
 } from '../integrations/microsoft365/graphClient.js';
 import { friendlySkuName } from '../integrations/microsoft365/skuNames.js';
 import { countDomains, filterUsersByDomain } from '../integrations/microsoft365/domainFilter.js';
@@ -29,6 +34,17 @@ import { ValidationError } from '../errors/AppError.js';
 // sincronización dedica como máximo 10 min a leer MFA — ver el comentario en sync().
 const MFA_STALE_AFTER_MS = 12 * 60 * 60 * 1000;
 const MFA_TIME_BUDGET_MS = 10 * 60 * 1000;
+
+// Los informes de uso los actualiza Microsoft una vez por día: no tiene sentido bajarlos en
+// cada sincronización (que puede ser cada 15 min) — se refrescan como máximo cada 6 h.
+const USAGE_REPORTS_STALE_AFTER_MS = 6 * 60 * 60 * 1000;
+
+// Con "ocultar nombres" activado en el centro de administración de M365 los informes
+// devuelven identificadores tipo hash en vez del correo del usuario.
+const CONCEALED_NAMES_NOTE =
+  'Los informes de Microsoft 365 traen los nombres de usuario OCULTOS (identificadores en vez de correos). ' +
+  'Para verlos: Centro de administración de Microsoft 365 → Configuración → Configuración de la organización → ' +
+  'Informes → desmarcar "Mostrar nombres de usuario, grupo y sitio ocultos en todos los informes".';
 
 // Minúsculas y sin tildes (el SQL hace lo mismo con unaccent(lower(...))).
 function normalizeSearchText(text) {
@@ -109,6 +125,7 @@ export const m365Service = {
     const trigger = req ? 'manual' : 'scheduled';
     const clientSecret = decryptSecret(settingsRow.client_secret_encrypted);
 
+    let accessToken;
     let skus;
     let graphUsers;
     let detectedDomains = [];
@@ -118,7 +135,7 @@ export const m365Service = {
     // userId → { isMfaRegistered, isMfaCapable, methodsRegistered, checkedAt }
     let mfaByUserId = new Map();
     try {
-      const accessToken = await getAccessToken({ tenantId: settingsRow.tenant_id, clientId: settingsRow.client_id, clientSecret });
+      accessToken = await getAccessToken({ tenantId: settingsRow.tenant_id, clientId: settingsRow.client_id, clientSecret });
       let allGraphUsers;
       [skus, allGraphUsers] = await Promise.all([fetchSubscribedSkus(accessToken), fetchUsersWithLicenses(accessToken)]);
 
@@ -235,6 +252,8 @@ export const m365Service = {
     const syncedAt = new Date();
     await m365Repository.upsertSettings({ last_synced_at: syncedAt, detected_domains: JSON.stringify(detectedDomains) });
 
+    const usageReportsWarning = await m365Service.refreshUsageReports(accessToken, settingsRow);
+
     await recordEvent({
       userId: actorId,
       action: 'm365.sync',
@@ -242,10 +261,71 @@ export const m365Service = {
       resourceId: settingsRow.id,
       result: 'success',
       req,
-      metadata: { licensesCount: licenses.length, usersCount: users.length, ignoredUsersCount, mfaSource, mfaWarning, trigger },
+      metadata: { licensesCount: licenses.length, usersCount: users.length, ignoredUsersCount, mfaSource, mfaWarning, usageReportsWarning, trigger },
     });
 
-    return { licensesCount: licenses.length, usersCount: users.length, ignoredUsersCount, syncedAt: syncedAt.toISOString(), mfaSource, mfaWarning };
+    return { licensesCount: licenses.length, usersCount: users.length, ignoredUsersCount, syncedAt: syncedAt.toISOString(), mfaSource, mfaWarning, usageReportsWarning };
+  },
+
+  /**
+   * Baja los informes de uso de buzones, OneDrive, SharePoint y Teams (si están vencidos) y
+   * guarda la foto. NUNCA tumba la sincronización: si falla (ej. falta el
+   * permiso `Reports.Read.All`) deja el aviso en `usage_reports_note` y lo
+   * devuelve. Aplica el mismo filtro de dominios que los usuarios.
+   *
+   * @returns {Promise<string | null>} aviso, o null si todo salió bien / no hacía falta
+   */
+  async refreshUsageReports(accessToken, settingsRow) {
+    const fetchedAt = settingsRow.usage_reports_fetched_at ? new Date(settingsRow.usage_reports_fetched_at).getTime() : 0;
+    const fresh = Date.now() - fetchedAt < USAGE_REPORTS_STALE_AFTER_MS;
+    if (fresh) return null;
+
+    // Cada informe es independiente: si uno falla (permiso, cambio de la API beta…) los
+    // demás se guardan igual y el que falló conserva su última foto.
+    const results = await Promise.allSettled([
+      fetchMailboxUsage(accessToken),
+      fetchOneDriveUsage(accessToken),
+      fetchSharePointSites(accessToken),
+      fetchTeamsUserActivity(accessToken),
+      fetchTeamsActivity(accessToken),
+    ]);
+    const labels = ['buzones', 'OneDrive', 'SharePoint', 'actividad de Teams por usuario', 'equipos de Teams (API beta)'];
+    const [mailboxRows, onedriveRows, sharepointRows, teamsUserRows, teamsRows] = results.map((r) => (r.status === 'fulfilled' ? r.value : null));
+
+    const reports = {};
+    // El filtro de dominios es de USUARIOS: se aplica a los informes por usuario, no a
+    // sitios de SharePoint ni a equipos de Teams (su "propietario" suele ser un grupo).
+    if (mailboxRows) reports.mailboxes = filterUsersByDomain(mailboxRows, settingsRow.allowed_domains).admitted;
+    if (onedriveRows) reports.onedrive = filterUsersByDomain(onedriveRows, settingsRow.allowed_domains).admitted;
+    if (sharepointRows) reports.sharepoint = sharepointRows;
+    if (teamsUserRows) reports.teamsUsers = filterUsersByDomain(teamsUserRows, settingsRow.allowed_domains).admitted;
+    if (teamsRows) reports.teams = teamsRows;
+
+    const notes = [];
+    results.forEach((r, i) => {
+      if (r.status === 'rejected') notes.push(`No se pudo obtener el informe de ${labels[i]}: ${r.reason.message}`);
+    });
+
+    const userRows = [mailboxRows, onedriveRows, teamsUserRows].filter(Boolean).flat();
+    const concealed = userRows.length > 0 && userRows.filter((r) => !r.userPrincipalName?.includes('@')).length > userRows.length / 2;
+    if (concealed) notes.push(CONCEALED_NAMES_NOTE);
+
+    if (Object.keys(reports).length) await m365Repository.replaceUsageReports(reports);
+    const note = notes.length ? notes.join(' ') : null;
+    // La fecha de última descarga solo avanza si TODOS los informes salieron bien: así, ante una falla
+    // parcial, la próxima sincronización lo vuelve a intentar en vez de esperar 6 h.
+    await m365Repository.upsertSettings({ usage_reports_note: note, ...(notes.some((n) => n !== CONCEALED_NAMES_NOTE) ? {} : { usage_reports_fetched_at: new Date() }) });
+    return note;
+  },
+
+  /** Top 10 de buzones y de OneDrive por espacio usado, más el aviso de la última descarga. */
+  async getServicesUsage() {
+    const [usage, settingsRow] = await Promise.all([m365Repository.getServicesUsage(10), m365Repository.getSettings()]);
+    return {
+      ...usage,
+      reportsFetchedAt: settingsRow?.usage_reports_fetched_at ?? null,
+      note: settingsRow?.usage_reports_note ?? null,
+    };
   },
 
   async listLicenses() {

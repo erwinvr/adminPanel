@@ -19,6 +19,7 @@ import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContaine
 import { Share2 } from 'lucide-react';
 import { ShareDialog } from '../components/ShareDialog.jsx';
 import { Button } from '@/components/ui/button.jsx';
+import { formatBytes } from '@/lib/formatBytes.js';
 
 const STATUS_BADGE_VARIANT = { Success: 'success', Warning: 'warning', Failed: 'destructive', None: 'muted' };
 const STATUS_LABEL = { Success: 'Éxito', Warning: 'Advertencia', Failed: 'Error', None: 'Sin ejecutar' };
@@ -36,13 +37,6 @@ const TOOLTIP_STYLE = {
   itemStyle: { color: 'var(--muted-foreground)' },
   cursor: { fill: 'var(--muted)', opacity: 0.4 },
 };
-
-function formatBytes(bytes) {
-  if (bytes == null) return '—';
-  const gb = bytes / 1024 ** 3;
-  if (gb >= 1024) return `${(gb / 1024).toFixed(1)} TB`;
-  return `${gb.toFixed(1)} GB`;
-}
 
 function StatCard({ label, value }) {
   return (
@@ -197,7 +191,7 @@ export function BackupDashboardPage() {
 
   return (
     <Layout>
-      <div className="flex items-start justify-between gap-4">
+      <div className="mb-2 flex items-start justify-between gap-4">
         <h1 className="text-2xl font-semibold">Backups</h1>
         <Button type="button" variant="outline" size="sm" onClick={() => setShareOpen(true)}>
           <Share2 className="size-4" />

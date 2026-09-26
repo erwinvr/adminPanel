@@ -22,6 +22,10 @@ export async function getSyncStatus(req, res) {
   res.status(200).json({ success: true, data: getSyncState('m365') });
 }
 
+export async function getServicesUsage(req, res) {
+  res.status(200).json({ success: true, data: await m365Service.getServicesUsage() });
+}
+
 export async function listLicenses(req, res) {
   const licenses = await m365Service.listLicenses();
   res.status(200).json({ success: true, data: licenses });

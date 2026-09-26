@@ -23,6 +23,8 @@ router.patch(
 router.post('/sync', requirePermission(PERMISSIONS.M365_EDIT), asyncHandler(m365Controller.sync));
 router.get('/sync/status', requirePermission(PERMISSIONS.M365_EDIT), asyncHandler(m365Controller.getSyncStatus));
 
+router.get('/services-usage', requirePermission(PERMISSIONS.M365_VIEW), asyncHandler(m365Controller.getServicesUsage));
+
 router.get('/licenses', requirePermission(PERMISSIONS.M365_VIEW), asyncHandler(m365Controller.listLicenses));
 
 // Ruta fija ANTES de cualquier "/users/:id" futuro.

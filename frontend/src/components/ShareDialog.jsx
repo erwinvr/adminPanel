@@ -10,7 +10,7 @@
  *
  * `dashboardKey` tiene que ser uno de los que el backend reconoce (ver
  * services/share.service.js — 'topology' | 'providers' | 'users-insights' |
- * 'backups' | 'vuln' | 'network-topology').
+ * 'backups' | 'vuln' | 'network-topology' | 'm365-services').
  */
 
 import { useEffect, useState } from 'react';

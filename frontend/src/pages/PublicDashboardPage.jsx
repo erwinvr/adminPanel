@@ -21,6 +21,7 @@ import { ProvidersTable } from './ProvidersDashboardPage.jsx';
 import { UserSecurityInsightsView } from './UsersInsightsPage.jsx';
 import { BackupDashboardView } from './BackupDashboardPage.jsx';
 import { VulnDashboardView } from './VulnDashboardPage.jsx';
+import { M365ServicesView } from './M365ServicesPage.jsx';
 import { Alert, AlertDescription } from '@/components/ui/alert.jsx';
 
 // React Flow es pesado — se carga aparte, igual que en App.jsx, para
@@ -35,6 +36,7 @@ const DASHBOARD_TITLES = {
   backups: 'Backups',
   vuln: 'Vulnerabilidades',
   'network-topology': 'Topología de Red',
+  'm365-services': 'Servicios M365',
 };
 
 async function noopRefresh() {}
@@ -92,6 +94,7 @@ export function PublicDashboardPage() {
             {result.dashboardKey === 'users-insights' && <UserSecurityInsightsView data={result.data} />}
             {result.dashboardKey === 'backups' && <BackupDashboardView data={result.data} isPublic />}
             {result.dashboardKey === 'vuln' && <VulnDashboardView data={result.data} isPublic />}
+            {result.dashboardKey === 'm365-services' && <M365ServicesView data={result.data} isPublic />}
             {result.dashboardKey === 'network-topology' && (
               <Suspense fallback={<p className="text-muted-foreground">Cargando…</p>}>
                 <NetworkTopologyView graph={result.data.graph} isPublic />

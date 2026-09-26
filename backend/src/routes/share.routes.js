@@ -24,6 +24,7 @@ const DASHBOARD_KEY_PERMISSIONS = {
   backups: PERMISSIONS.BACKUPS_VIEW,
   vuln: PERMISSIONS.VULN_VIEW,
   'network-topology': PERMISSIONS.NETWORK_TOPOLOGY_VIEW,
+  'm365-services': PERMISSIONS.M365_VIEW,
 };
 
 // Réplica de requirePermission.js, pero resolviendo el código de

@@ -25,10 +25,11 @@ import { insightsService } from './insights.service.js';
 import { backupService } from './backup.service.js';
 import { vulnService } from './vuln.service.js';
 import { networkTopologyService } from './networkTopology.service.js';
+import { m365Service } from './m365.service.js';
 import { recordEvent } from '../audit/audit.service.js';
 import { NotFoundError } from '../errors/AppError.js';
 
-const DASHBOARD_KEYS = ['topology', 'providers', 'users-insights', 'backups', 'vuln', 'network-topology'];
+const DASHBOARD_KEYS = ['topology', 'providers', 'users-insights', 'backups', 'vuln', 'network-topology', 'm365-services'];
 
 function assertValidKey(dashboardKey) {
   if (!DASHBOARD_KEYS.includes(dashboardKey)) throw new NotFoundError('Dashboard no encontrado');
@@ -52,6 +53,7 @@ async function loadDashboardData(dashboardKey) {
   if (dashboardKey === 'backups') return await backupService.getDashboard();
   if (dashboardKey === 'vuln') return await vulnService.getDashboard();
   if (dashboardKey === 'network-topology') return { graph: await networkTopologyService.getGraph() };
+  if (dashboardKey === 'm365-services') return await m365Service.getServicesUsage();
   throw new NotFoundError('Dashboard no encontrado');
 }
 
