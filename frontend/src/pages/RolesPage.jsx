@@ -143,6 +143,7 @@ function RoleFormModal({ existingRole, onClose, onSaved }) {
       name: 'permissionIds',
       label: 'Permisos',
       type: 'checkbox-group',
+      searchable: true,
       value: currentPermissionIds,
       options: allPermissions.map((p) => ({ value: p.id, label: `${p.code} — ${p.description ?? ''}` })),
     },

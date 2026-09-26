@@ -81,6 +81,11 @@ esas, ver `git log`.
 
 ### Agregado
 
+- **Roles y permisos → crear/editar rol**: buscador en la lista de permisos
+  (39 hoy) que filtra por código o descripción, sin distinguir mayúsculas ni
+  tildes, con contador "N de 39 · M seleccionados". La selección no se pierde
+  al filtrar, y Enter en el buscador no envía el formulario. Es una opción
+  genérica del campo `checkbox-group` (`searchable: true`) del componente `Form`.
 - **Microsoft 365 → Licencias compradas**: buscador por nombre de licencia
   o SKU (sin distinguir mayúsculas ni tildes; varios términos = todos deben
   coincidir), con contador de resultados.

@@ -95,6 +95,74 @@ export function Form({ fields, submitLabel, onSubmit }) {
   );
 }
 
+// Minúsculas y sin tildes: "usuarios" encuentra "Ver usuarios", "ad" encuentra "AD".
+const normalizeSearch = (text) => (text ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+/**
+ * Lista de checkboxes (`type: 'checkbox-group'`). Con `searchable: true` suma un
+ * buscador que filtra las opciones VISIBLES (por su texto; con varios términos,
+ * todos deben coincidir) — la selección no se pierde al filtrar: `value` sigue
+ * teniendo todo lo marcado, tenga o no la opción a la vista.
+ */
+function CheckboxGroupField({ field, value, onChange }) {
+  const [search, setSearch] = useState('');
+  const selected = new Set(value ?? []);
+  const options = field.options ?? [];
+
+  const terms = normalizeSearch(search).split(/\s+/).filter(Boolean);
+  const visible = terms.length ? options.filter((o) => terms.every((t) => normalizeSearch(o.label).includes(t))) : options;
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <p className="text-sm font-medium">{field.label}</p>
+      {field.searchable && (
+        <div className="flex items-center gap-3">
+          <Input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            // Enter dentro de un <form> lo enviaría: acá solo filtra.
+            onKeyDown={(e) => e.key === 'Enter' && e.preventDefault()}
+            placeholder="Buscar…"
+            className="max-w-xs"
+          />
+          <span className="text-xs text-muted-foreground">
+            {terms.length ? `${visible.length} de ${options.length} · ` : ''}
+            {selected.size} seleccionado{selected.size === 1 ? '' : 's'}
+          </span>
+        </div>
+      )}
+      {/*
+        contain-content (CSS `contain: layout paint`) es necesario acá:
+        sin él, el modal que envuelve este formulario (Modal.jsx, con su
+        propio max-height + overflow-y-auto) termina midiendo un
+        scrollHeight que incluye el contenido SIN recortar de ESTA lista
+        (aunque acá ya se recorta a max-h-52) — el resultado es un scroll
+        fantasma en el modal que, al arrastrarlo, muestra espacio en
+        blanco. `contain-content` le dice al navegador que el layout/paint
+        de esta lista no se filtra hacia afuera, y elimina ese scroll.
+      */}
+      <div className="flex max-h-52 flex-col gap-2 overflow-y-auto rounded-md border p-3 contain-content">
+        {visible.length === 0 && <p className="text-sm text-muted-foreground">Ninguna opción coincide con la búsqueda</p>}
+        {visible.map((opt) => (
+          <label key={opt.value} className="flex items-center gap-2 text-sm font-normal">
+            <Checkbox
+              checked={selected.has(opt.value)}
+              onCheckedChange={(checked) => {
+                const next = new Set(selected);
+                if (checked) next.add(opt.value);
+                else next.delete(opt.value);
+                onChange([...next]);
+              }}
+            />
+            {opt.label}
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function FieldInput({ field, value, onChange }) {
   const id = `field-${field.name}`;
 
@@ -135,38 +203,7 @@ function FieldInput({ field, value, onChange }) {
   }
 
   if (field.type === 'checkbox-group') {
-    const selected = new Set(value ?? []);
-    return (
-      <div className="flex flex-col gap-1.5">
-        <p className="text-sm font-medium">{field.label}</p>
-        {/*
-          contain-content (CSS `contain: layout paint`) es necesario acá:
-          sin él, el modal que envuelve este formulario (Modal.jsx, con su
-          propio max-height + overflow-y-auto) termina midiendo un
-          scrollHeight que incluye el contenido SIN recortar de ESTA lista
-          (aunque acá ya se recorta a max-h-52) — el resultado es un scroll
-          fantasma en el modal que, al arrastrarlo, muestra espacio en
-          blanco. `contain-content` le dice al navegador que el layout/paint
-          de esta lista no se filtra hacia afuera, y elimina ese scroll.
-        */}
-        <div className="flex max-h-52 flex-col gap-2 overflow-y-auto rounded-md border p-3 contain-content">
-          {(field.options ?? []).map((opt) => (
-            <label key={opt.value} className="flex items-center gap-2 text-sm font-normal">
-              <Checkbox
-                checked={selected.has(opt.value)}
-                onCheckedChange={(checked) => {
-                  const next = new Set(selected);
-                  if (checked) next.add(opt.value);
-                  else next.delete(opt.value);
-                  onChange([...next]);
-                }}
-              />
-              {opt.label}
-            </label>
-          ))}
-        </div>
-      </div>
-    );
+    return <CheckboxGroupField field={field} value={value} onChange={onChange} />;
   }
 
   return (
