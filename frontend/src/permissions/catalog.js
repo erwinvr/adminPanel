@@ -67,4 +67,6 @@ export const PERMISSIONS = Object.freeze({
 
   PAM360_VIEW: 'pam360.view',
   PAM360_EDIT: 'pam360.edit',
+
+  REPORTS_VIEW: 'reports.view',
 });

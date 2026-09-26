@@ -81,6 +81,17 @@ esas, ver `git log`.
 
 ### Agregado
 
+- **Sección Reportes** (*Gestión → Reportes*, permiso nuevo `reports.view`,
+  incluido en `administrator` tras `seed:run`): 6 reportes de Microsoft 365
+  (usuarios habilitados sin MFA, cuentas deshabilitadas con licencia,
+  licencias sin asignar, buzones cerca de la cuota, OneDrive y sitios de
+  SharePoint sin actividad). Filtro por rango de fechas, búsqueda y umbrales
+  ajustables; **el botón "Exportar CSV" descarga todo lo que cumple los filtros
+  en pantalla** (formato estándar o Excel en español, UTF-8 con BOM, defensa
+  contra inyección de fórmulas, tope de 100.000 filas). Cada exportación
+  queda en Auditoría (`report.export`). API `GET /api/reports[/:key[/export]]`.
+  El envío programado por correo queda para una etapa posterior. Ver
+  [docs/reports.md](docs/reports.md).
 - **Dashboard → Servicios M365**: página nueva con el uso de **correo,
   OneDrive, SharePoint y Teams** de Microsoft 365, con totales y un top 10 de
   cada uno: los usuarios con el buzón más lleno y con el OneDrive más

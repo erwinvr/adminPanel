@@ -26,6 +26,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { badgeHtml } from '@/lib/badgeHtml.js';
 import { escapeHtml } from '@/lib/escapeHtml.js';
 import { formatBytes } from '@/lib/formatBytes.js';
+import { formatDay } from '@/lib/formatDay.js';
 
 // Colores de estado reservados (mismos que el dashboard de Backups): crítico ≥ 90 %, advertencia ≥ 75 %.
 const COLOR_CRITICAL = '#d03b3b';
@@ -41,13 +42,6 @@ const TOOLTIP_STYLE = {
 
 const statusOf = (pct) => (pct == null ? 'muted' : pct >= 90 ? 'destructive' : pct >= 75 ? 'warning' : 'success');
 const colorOf = (pct) => (pct == null ? 'var(--muted-foreground)' : pct >= 90 ? COLOR_CRITICAL : pct >= 75 ? COLOR_WARNING : COLOR_OK);
-
-// 'AAAA-MM-DD' (texto, sin zona horaria) → 'DD/MM/AAAA'
-function formatDay(day) {
-  if (!day) return '—';
-  const [y, m, d] = day.split('-');
-  return `${d}/${m}/${y}`;
-}
 
 function StatCard({ label, value, hint }) {
   return (

@@ -39,6 +39,7 @@ import {
   GitCompare,
   Unlock,
   Crown,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { toast } from 'sonner';
@@ -144,6 +145,12 @@ const MANAGEMENT_SECTIONS = [
       { path: '/users', label: 'Usuarios', permission: PERMISSIONS.USERS_VIEW, icon: Users },
       { path: '/roles', label: 'Roles y permisos', permission: PERMISSIONS.ROLES_VIEW, icon: Shield },
     ],
+  },
+  {
+    key: 'reports',
+    label: 'Reportes',
+    icon: FileSpreadsheet,
+    items: [{ path: '/reports', label: 'Reportes', permission: PERMISSIONS.REPORTS_VIEW, icon: FileSpreadsheet }],
   },
   {
     key: 'audit',

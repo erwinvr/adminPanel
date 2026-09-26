@@ -70,7 +70,26 @@ async function request(path, options = {}) {
   return { data: body.data, meta: body.meta };
 }
 
+/**
+ * Descarga un archivo (ej. CSV de un reporte) con la sesión actual. Devuelve
+ * `{ blob, filename }`; el nombre sale del header Content-Disposition.
+ */
+async function download(path) {
+  const response = await fetch(`${API_BASE_URL}${path}`, { credentials: 'include' });
+  if (response.status === 401) {
+    window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+  }
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    const { code, message, details } = body?.error ?? {};
+    throw new ApiError(message ?? 'No se pudo descargar el archivo', response.status, code ?? 'DOWNLOAD_FAILED', details);
+  }
+  const filename = /filename="?([^";]+)"?/.exec(response.headers.get('content-disposition') ?? '')?.[1] ?? 'descarga';
+  return { blob: await response.blob(), filename };
+}
+
 export const httpClient = {
+  download,
   get: async (path) => (await request(path, { method: 'GET' })).data,
   getWithMeta: (path) => request(path, { method: 'GET' }),
   post: async (path, body) => (await request(path, { method: 'POST', body: JSON.stringify(body) })).data,

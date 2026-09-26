@@ -45,6 +45,7 @@ import { NetBackupHistoryPage } from './pages/NetBackupHistoryPage.jsx';
 import { NetBackupBitacoraPage } from './pages/NetBackupBitacoraPage.jsx';
 import { NetBackupCompliancePage } from './pages/NetBackupCompliancePage.jsx';
 import { PAM360SettingsPage } from './pages/PAM360SettingsPage.jsx';
+import { ReportsPage } from './pages/ReportsPage.jsx';
 import { PAM360AccessRequestsPage } from './pages/PAM360AccessRequestsPage.jsx';
 import { SmtpSettingsPage } from './pages/SmtpSettingsPage.jsx';
 import { ForcedPasswordChangePage } from './pages/ForcedPasswordChangePage.jsx';
@@ -310,6 +311,14 @@ export function App() {
         element={
           <ProtectedRoute permission={PERMISSIONS.NETBACKUP_VIEW}>
             <NetBackupCompliancePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/reports"
+        element={
+          <ProtectedRoute permission={PERMISSIONS.REPORTS_VIEW}>
+            <ReportsPage />
           </ProtectedRoute>
         }
       />

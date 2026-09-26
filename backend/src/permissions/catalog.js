@@ -67,6 +67,8 @@ export const PERMISSIONS = Object.freeze({
 
   PAM360_VIEW: 'pam360.view',
   PAM360_EDIT: 'pam360.edit',
+
+  REPORTS_VIEW: 'reports.view',
 });
 
 /**
@@ -180,4 +182,6 @@ export const PERMISSION_DEFINITIONS = [
 
   { code: PERMISSIONS.PAM360_VIEW, module: 'pam360', description: 'Ver el reporte de solicitudes de acceso sincronizado desde PAM360' },
   { code: PERMISSIONS.PAM360_EDIT, module: 'pam360', description: 'Configurar la conexión a PAM360 y disparar la sincronización' },
+
+  { code: PERMISSIONS.REPORTS_VIEW, module: 'reports', description: 'Ver y exportar a CSV los reportes (usuarios sin MFA, licencias, capacidad, etc.)' },
 ];
