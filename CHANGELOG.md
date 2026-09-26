@@ -81,6 +81,9 @@ esas, ver `git log`.
 
 ### Agregado
 
+- **Microsoft 365 → Licencias compradas**: buscador por nombre de licencia
+  o SKU (sin distinguir mayúsculas ni tildes; varios términos = todos deben
+  coincidir), con contador de resultados.
 - **Microsoft 365 → MFA de usuarios**: filtro por estado de MFA — *Todos*,
   *Solo con MFA registrado*, *Solo sin MFA registrado* y *Sin datos de MFA*
   (cuentas deshabilitadas o aún no leídas). Se resuelve en el servidor
