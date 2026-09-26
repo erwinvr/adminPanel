@@ -261,7 +261,7 @@ export const m365Service = {
   // de cada usuario se devuelven con su nombre comercial (ver skuNames.js),
   // no con el SKU — sin repetir aunque dos SKU compartan nombre (ej.
   // VISIOCLIENT y VISIO_PLAN2_DEPT).
-  async listUsers({ page, pageSize, search }) {
+  async listUsers({ page, pageSize, search, mfa }) {
     const terms = normalizeSearchText(search).split(/\s+/).filter(Boolean).slice(0, 8);
     let termFilters = [];
     if (terms.length) {
@@ -274,7 +274,7 @@ export const m365Service = {
       }));
     }
 
-    const { items, pagination } = await m365Repository.listUsersPage({ page, pageSize, termFilters });
+    const { items, pagination } = await m365Repository.listUsersPage({ page, pageSize, termFilters, mfa });
     return {
       items: items.map((u) => ({ ...u, licenses: [...new Set(u.licenses.map(friendlySkuName))].sort((a, b) => a.localeCompare(b)) })),
       pagination,

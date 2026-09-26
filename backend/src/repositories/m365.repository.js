@@ -62,10 +62,17 @@ export const m365Repository = {
    * por término, los SKU cuyo nombre lo contiene (los resuelve el servicio,
    * que conoce los nombres comerciales).
    *
-   * @param {{ page: number, pageSize: number, termFilters?: { term: string, skus: string[] }[] }} params
+   * `mfa`: 'registered' (tiene método de segundo factor), 'missing' (no tiene),
+   * 'unknown' (sin dato: cuenta deshabilitada o aún no leído).
+   *
+   * @param {{ page: number, pageSize: number, termFilters?: { term: string, skus: string[] }[], mfa?: 'registered' | 'missing' | 'unknown' }} params
    */
-  async listUsersPage({ page, pageSize, termFilters = [] }) {
+  async listUsersPage({ page, pageSize, termFilters = [], mfa }) {
     const query = db('m365_users as u');
+
+    if (mfa === 'registered') query.where('u.is_mfa_registered', true);
+    else if (mfa === 'missing') query.where('u.is_mfa_registered', false);
+    else if (mfa === 'unknown') query.whereNull('u.is_mfa_registered');
 
     for (const { term, skus } of termFilters) {
       const pattern = `%${term.replace(/[\\%_]/g, '\\$&')}%`;

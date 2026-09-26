@@ -81,6 +81,11 @@ esas, ver `git log`.
 
 ### Agregado
 
+- **Microsoft 365 → MFA de usuarios**: filtro por estado de MFA — *Todos*,
+  *Solo con MFA registrado*, *Solo sin MFA registrado* y *Sin datos de MFA*
+  (cuentas deshabilitadas o aún no leídas). Se resuelve en el servidor
+  (`GET /m365/users?mfa=registered|missing|unknown`), así que se combina con
+  la búsqueda y la paginación y muestra el total de resultados.
 - **"Compartir" en todos los dashboards**: además del Mapa de aplicaciones,
   Proveedores y Usuarios, ahora **Backups**, **Vulnerabilidades** y
   **Topología de Red** generan un enlace público de solo lectura (revocable,

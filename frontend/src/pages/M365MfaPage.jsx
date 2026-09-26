@@ -29,8 +29,18 @@ import { m365Service } from '../services/m365.service.js';
 import { usePagedList } from '../hooks/usePagedList.js';
 import { Alert, AlertDescription } from '@/components/ui/alert.jsx';
 import { Input } from '@/components/ui/input.jsx';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select.jsx';
 import { badgeHtml } from '@/lib/badgeHtml.js';
 import { escapeHtml } from '@/lib/escapeHtml.js';
+
+// Radix <Select.Item> no admite value="" — mismo criterio que ADComputersPage.jsx.
+const ALL_VALUE = '__all__';
+const MFA_FILTER_OPTIONS = [
+  { value: ALL_VALUE, label: 'Todos los usuarios' },
+  { value: 'registered', label: 'Solo con MFA registrado' },
+  { value: 'missing', label: 'Solo sin MFA registrado' },
+  { value: 'unknown', label: 'Sin datos de MFA' },
+];
 
 function triStateBadge(value) {
   if (value === true) return badgeHtml('Sí', 'success');
@@ -39,7 +49,7 @@ function triStateBadge(value) {
 }
 
 export function M365MfaPage() {
-  const { items, meta, loading, error, params, setSearchDebounced, goToPage } = usePagedList(m365Service.listUsers);
+  const { items, meta, loading, error, params, setFilter, setSearchDebounced, goToPage } = usePagedList(m365Service.listUsers);
   // Totales de TODO el tenant (no de la página visible), calculados en SQL.
   const [summary, setSummary] = useState(null);
 
@@ -66,13 +76,30 @@ export function M365MfaPage() {
         </p>
       )}
 
-      <div className="my-4">
+      <div className="my-4 flex flex-wrap items-center gap-3">
         <Input
           type="search"
           onChange={(e) => setSearchDebounced(e.target.value)}
           placeholder="Buscar por nombre, email o licencia"
           className="max-w-sm"
         />
+        <Select value={params.mfa ?? ALL_VALUE} onValueChange={(value) => setFilter('mfa', value === ALL_VALUE ? undefined : value)}>
+          <SelectTrigger className="w-60">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {MFA_FILTER_OPTIONS.map((o) => (
+              <SelectItem key={o.value} value={o.value}>
+                {o.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {(params.mfa || params.search) && meta && (
+          <span className="text-sm text-muted-foreground">
+            {meta.pagination.total} usuario{meta.pagination.total === 1 ? '' : 's'}
+          </span>
+        )}
       </div>
 
       {error ? (
@@ -105,8 +132,8 @@ export function M365MfaPage() {
             emptyMessage={
               loading
                 ? 'Cargando…'
-                : params.search
-                  ? 'Ningún usuario coincide con la búsqueda'
+                : params.search || params.mfa
+                  ? 'Ningún usuario coincide con los filtros'
                   : 'No hay usuarios sincronizados todavía. Andá a "Configuración" y sincronizá.'
             }
           />
