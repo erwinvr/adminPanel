@@ -222,6 +222,65 @@ export const REPORTS = [
     orderBy: [{ column: 'usedBytes', order: 'desc' }, { column: 'name' }],
     mapRow: (r) => ({ ...r, usedBytes: Number(r.usedBytes), allocatedBytes: r.allocatedBytes == null ? null : Number(r.allocatedBytes), fileCount: r.fileCount == null ? null : Number(r.fileCount) }),
   },
+  {
+    key: 'netbackup-successful-runs',
+    title: 'Backups de networking exitosos',
+    description:
+      'Ejecuciones exitosas del backup de configuración de equipos de networking (una fila por ejecución). La fecha filtra por el inicio de la ejecución (día en UTC); la hora también se muestra en UTC.',
+    source: 'Backup Networking',
+    dateLabel: 'Inicio de la ejecución',
+    dateExpression: 'r.started_at::date',
+    params: [],
+    searchColumns: ['h.brand', 'h.model', 'h.management_ip', 'o.name'],
+    columns: [
+      { key: 'device', label: 'Equipo', type: 'text' },
+      { key: 'managementIp', label: 'IP de gestión', type: 'text' },
+      { key: 'office', label: 'Oficina', type: 'text' },
+      { key: 'startedAt', label: 'Inicio (UTC)', type: 'text' },
+      { key: 'durationSeconds', label: 'Duración (s)', type: 'number' },
+      { key: 'trigger', label: 'Disparo', type: 'text' },
+    ],
+    build: () =>
+      db('netbackup_runs as r')
+        .join('netbackup_devices as d', 'd.id', 'r.device_id')
+        .join('hardware_inventory as h', 'h.id', 'd.hardware_id')
+        .join('offices as o', 'o.id', 'h.office_id')
+        .where('r.result', 'success')
+        .select(
+          db.raw(`h.brand || ' ' || h.model as "device"`),
+          'h.management_ip as managementIp',
+          'o.name as office',
+          db.raw(`to_char(r.started_at at time zone 'UTC', 'YYYY-MM-DD HH24:MI:SS') as "startedAt"`),
+          db.raw('round(extract(epoch from (r.finished_at - r.started_at)))::int as "durationSeconds"'),
+          db.raw(`case r.trigger when 'manual' then 'Manual' else 'Programado' end as "trigger"`)
+        ),
+    orderBy: [{ column: 'startedAt', order: 'desc' }, { column: 'device' }],
+  },
+  {
+    key: 'veeam-successful-jobs',
+    title: 'Jobs de Veeam con última ejecución exitosa',
+    description:
+      'Jobs de Veeam Backup & Replication cuya ÚLTIMA ejecución terminó con éxito. Veeam solo informa la última ejecución de cada job (no el historial), por lo que la fecha filtra por esa última ejecución y depende de la frecuencia de sincronización.',
+    source: 'Veeam',
+    dateLabel: 'Última ejecución',
+    dateExpression: 'j.last_run_at::date',
+    params: [],
+    searchColumns: ['j.name'],
+    columns: [
+      { key: 'name', label: 'Job', type: 'text' },
+      { key: 'lastRunAt', label: 'Última ejecución (UTC)', type: 'text' },
+      { key: 'syncedAt', label: 'Sincronizado (UTC)', type: 'text' },
+    ],
+    build: () =>
+      db('backup_jobs as j')
+        .where('j.last_status', 'Success')
+        .select(
+          'j.name',
+          db.raw(`to_char(j.last_run_at at time zone 'UTC', 'YYYY-MM-DD HH24:MI:SS') as "lastRunAt"`),
+          db.raw(`to_char(j.synced_at at time zone 'UTC', 'YYYY-MM-DD HH24:MI:SS') as "syncedAt"`)
+        ),
+    orderBy: [{ column: 'lastRunAt', order: 'desc' }, { column: 'name' }],
+  },
 ];
 
 export function findReport(key) {

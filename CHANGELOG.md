@@ -81,6 +81,10 @@ esas, ver `git log`.
 
 ### Agregado
 
+- **Reportes de backups exitosos**: "Backups de networking exitosos" (una fila por
+  ejecución exitosa, filtrable por rango de fechas y exportable a CSV) y "Jobs
+  de Veeam con última ejecución exitosa" (Veeam solo entrega la última
+  ejecución por job, no el historial). Ver [docs/reports.md](docs/reports.md).
 - **Sección Reportes** (*Gestión → Reportes*, permiso nuevo `reports.view`,
   incluido en `administrator` tras `seed:run`): 6 reportes de Microsoft 365
   (usuarios habilitados sin MFA, cuentas deshabilitadas con licencia,
