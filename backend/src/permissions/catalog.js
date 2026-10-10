@@ -146,7 +146,7 @@ export const PERMISSION_DEFINITIONS = [
   {
     code: PERMISSIONS.VULN_VIEW,
     module: 'vuln',
-    description: 'Ver el dashboard de vulnerabilidades (parches pendientes por equipo, Endpoint Central)',
+    description: 'Ver el dashboard de UEM (parches pendientes y cobertura del agente por equipo, Endpoint Central)',
   },
   {
     code: PERMISSIONS.VULN_EDIT,

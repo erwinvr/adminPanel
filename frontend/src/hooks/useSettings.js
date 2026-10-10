@@ -3,8 +3,7 @@
  *
  * Carga la configuración de una integración (`getSettings`) y expone su
  * estado de carga/error y `refresh()` — la parte que repetían las
- * páginas de configuración de AD, Microsoft 365, Veeam, PAM360 y
- * Vulnerabilidades.
+ * páginas de configuración de AD, Microsoft 365, Veeam, PAM360 y UEM.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';

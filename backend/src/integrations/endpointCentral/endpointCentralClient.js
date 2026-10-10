@@ -23,6 +23,29 @@ export class EndpointCentralApiError extends AppError {
 }
 
 /**
+ * Endpoint Central responde HTTP 200 (¡no 401/403!) incluso cuando el API key
+ * no tiene permiso para esa API puntual — el error viene en el cuerpo
+ * (`{"status":"error","error_code":"1010","error_description":"..."}`, código
+ * 1010 = "User is not authorized to access this API"). Revisar solo
+ * `response.ok` deja pasar esto como si fuera una lista vacía: el sync
+ * terminaba "exitoso" con 0 equipos en vez de avisar el motivo real.
+ */
+function assertNotApiError(payload, context) {
+  if (payload == null) {
+    throw new EndpointCentralApiError(`Endpoint Central devolvió una respuesta vacía o no-JSON en ${context} — probablemente un corte de red; reintentá.`);
+  }
+  if (payload?.status === 'error') {
+    const code = payload.error_code ? ` (código ${payload.error_code})` : '';
+    const detail = payload.error_description ?? 'motivo no informado';
+    const hint =
+      payload.error_code === '1010'
+        ? ' — revisá en Endpoint Central (Admin → API Key Generation) que el API key tenga marcado el permiso de esta API.'
+        : '';
+    throw new EndpointCentralApiError(`Endpoint Central rechazó ${context}: ${detail}${code}.${hint}`);
+  }
+}
+
+/**
  * No hay login propiamente dicho — se valida el API key pegándole a un
  * endpoint liviano, así el botón "Guardar configuración" puede avisar
  * de inmediato si está mal en vez de recién fallar en el próximo sync.
@@ -40,6 +63,8 @@ export async function verifyApiKey({ baseUrl, apiKey }) {
   if (!response.ok) {
     throw new EndpointCentralApiError('El API key fue rechazado — revisá que sea válido y no haya vencido. HTTP ' + response.status);
   }
+  const payload = await response.json().catch(() => null);
+  assertNotApiError(payload, 'la validación del API key');
 }
 
 /** Resumen de parches pendientes por equipo, paginado. */
@@ -63,8 +88,11 @@ export async function fetchComputerPatchSummary({ baseUrl, apiKey }) {
       const detail = payload?.message ?? `HTTP ${response.status}`;
       throw new EndpointCentralApiError('Endpoint Central respondió con un error: ' + detail);
     }
+    assertNotApiError(payload, 'la lectura del resumen de parches');
 
-    const rows = payload?.message_response?.allsystemsview ?? payload?.data ?? [];
+    // La respuesta real anida los equipos en message_response.allsystems (sin
+    // "view"): se comprobó contra el servidor — ver docs/vulnerabilidades.md.
+    const rows = payload?.message_response?.allsystems ?? payload?.data ?? [];
     results.push(...rows);
     if (rows.length < pageLimit) break;
     page += 1;

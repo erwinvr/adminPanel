@@ -57,7 +57,7 @@ const DASHBOARD_ITEMS = [
   { path: '/providers', label: 'Proveedores y recursos', permission: PERMISSIONS.PROVIDERS_VIEW, icon: Truck },
   { path: '/dashboard/users', label: 'Usuarios', permission: PERMISSIONS.INSIGHTS_VIEW, icon: ChartColumn },
   { path: '/backups/dashboard', label: 'Backups', permission: PERMISSIONS.BACKUPS_VIEW, icon: HardDrive },
-  { path: '/vuln/dashboard', label: 'Vulnerabilidades', permission: PERMISSIONS.VULN_VIEW, icon: ShieldAlert },
+  { path: '/vuln/dashboard', label: 'UEM', permission: PERMISSIONS.VULN_VIEW, icon: ShieldAlert },
   { path: '/network-topology', label: 'Topología de Red', permission: PERMISSIONS.NETWORK_TOPOLOGY_VIEW, icon: Router },
   { path: '/dashboard/m365-services', label: 'Servicios M365', permission: PERMISSIONS.M365_VIEW, icon: Cloud },
 ];
@@ -107,7 +107,7 @@ const MANAGEMENT_SECTIONS = [
   },
   {
     key: 'vuln',
-    label: 'Vulnerabilidades',
+    label: 'UEM',
     icon: ShieldAlert,
     items: [{ path: '/vuln/settings', label: 'Configuración', permission: PERMISSIONS.VULN_EDIT, icon: Settings }],
   },
@@ -161,7 +161,7 @@ const MANAGEMENT_SECTIONS = [
       { path: '/audit/m365', label: 'Microsoft 365', permission: PERMISSIONS.AUDIT_VIEW, icon: ScrollText },
       { path: '/audit/ad', label: 'Active Directory', permission: PERMISSIONS.AUDIT_VIEW, icon: ScrollText },
       { path: '/audit/veeam', label: 'Veeam', permission: PERMISSIONS.AUDIT_VIEW, icon: ScrollText },
-      { path: '/audit/vuln', label: 'Vulnerabilidades', permission: PERMISSIONS.AUDIT_VIEW, icon: ScrollText },
+      { path: '/audit/vuln', label: 'UEM', permission: PERMISSIONS.AUDIT_VIEW, icon: ScrollText },
       { path: '/audit/pam360', label: 'PAM360', permission: PERMISSIONS.AUDIT_VIEW, icon: ScrollText },
     ],
   },

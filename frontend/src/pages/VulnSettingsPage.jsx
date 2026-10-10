@@ -21,7 +21,7 @@ export function VulnSettingsPage() {
 
   return (
     <Layout>
-      <h1 className="text-2xl font-semibold">Vulnerabilidades — Configuración</h1>
+      <h1 className="text-2xl font-semibold">UEM — Configuración</h1>
       <p className="topology-page__hint">
         Parámetros de conexión a ManageEngine Endpoint Central. El API key se genera desde su consola (Admin → API Key
         Generation) — no hace falta usuario ni contraseña.

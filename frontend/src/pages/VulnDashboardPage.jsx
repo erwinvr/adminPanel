@@ -1,11 +1,11 @@
 /**
  * pages/VulnDashboardPage.jsx
  *
- * Dashboard de vulnerabilidades: porcentaje de equipos con
- * actualizaciones pendientes y el top 10 de equipos con más
- * actualizaciones pendientes (ManageEngine Endpoint Central).
- * Puramente de lectura — la sincronización vive en "Vulnerabilidades →
- * Configuración".
+ * Dashboard UEM (gestión unificada de endpoints, ManageEngine Endpoint
+ * Central): porcentaje de equipos con actualizaciones pendientes, el
+ * top 10 con más actualizaciones pendientes, y la cobertura del agente
+ * (equipos del dominio vs. equipos con el agente instalado, por SO).
+ * Puramente de lectura — la sincronización vive en "UEM → Configuración".
  */
 
 import { useEffect, useState } from 'react';
@@ -13,7 +13,7 @@ import { Layout } from '../components/Layout.jsx';
 import { vulnService } from '../services/vuln.service.js';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card.jsx';
 import { Alert, AlertDescription } from '@/components/ui/alert.jsx';
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList } from 'recharts';
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, LabelList } from 'recharts';
 import { Share2 } from 'lucide-react';
 import { ShareDialog } from '../components/ShareDialog.jsx';
 import { Button } from '@/components/ui/button.jsx';
@@ -21,6 +21,10 @@ import { Button } from '@/components/ui/button.jsx';
 // Color de estado (no categórico) — es la misma señal de "esto
 // necesita atención" que ya usan los top-10 de Usuarios.
 const COLOR_PENDING = '#d03b3b';
+// Cobertura del agente: "en el dominio" es la base (neutro) y "con agente"
+// se resalta con el color primario de la app.
+const COLOR_DOMAIN = '#64748b';
+const COLOR_AGENT = 'var(--primary)';
 
 const TOOLTIP_STYLE = {
   contentStyle: { background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12.5 },
@@ -55,7 +59,7 @@ export function VulnDashboardView({ data, isPublic = false }) {
       {data.totalComputers === 0 && (
         <Alert className="mb-4 max-w-xl">
           <AlertDescription>
-            {isPublic ? 'Todavía no hay equipos sincronizados.' : 'Todavía no hay equipos sincronizados. Andá a "Vulnerabilidades → Configuración" para traerlos.'}
+            {isPublic ? 'Todavía no hay equipos sincronizados.' : 'Todavía no hay equipos sincronizados. Andá a "UEM → Configuración" para traerlos.'}
           </AlertDescription>
         </Alert>
       )}
@@ -96,7 +100,55 @@ export function VulnDashboardView({ data, isPublic = false }) {
           )}
         </CardContent>
       </Card>
+
+      <AgentCoverageCard rows={data.agentCoverage} />
     </>
+  );
+}
+
+/**
+ * Cuántos equipos hay en el dominio (Active Directory) contra cuántos
+ * tienen el agente de Endpoint Central, por sistema operativo — la familia
+ * del SO ("Windows Server 2022" vs. "Windows 10/11") ya distingue
+ * servidores de equipos de usuario.
+ */
+function AgentCoverageCard({ rows }) {
+  const chartHeight = Math.max((rows?.length ?? 0) * 44, 140);
+  return (
+    <Card className="mt-4">
+      <CardHeader>
+        <CardTitle className="text-base">Cobertura del agente de Endpoint Central</CardTitle>
+        <CardDescription>Equipos en el dominio (Active Directory) vs. equipos con el agente instalado, por sistema operativo</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {!rows || rows.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">Sin datos todavía — sincronizá Active Directory y Endpoint Central.</p>
+        ) : (
+          <ResponsiveContainer width="100%" height={chartHeight} minWidth={280}>
+            <BarChart data={rows} layout="vertical" margin={{ top: 4, right: 30, bottom: 4, left: 4 }} barCategoryGap={16} barGap={4}>
+              <CartesianGrid horizontal={false} stroke="var(--border)" strokeDasharray="3 3" />
+              <XAxis type="number" allowDecimals={false} tick={{ fill: 'var(--muted-foreground)', fontSize: 11.5 }} axisLine={{ stroke: 'var(--border)' }} />
+              <YAxis
+                type="category"
+                dataKey="family"
+                width={150}
+                tickLine={false}
+                axisLine={{ stroke: 'var(--border)' }}
+                tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }}
+              />
+              <Tooltip {...TOOLTIP_STYLE} />
+              <Legend wrapperStyle={{ fontSize: 12.5 }} />
+              <Bar dataKey="domainCount" name="En el dominio (AD)" fill={COLOR_DOMAIN} radius={[0, 4, 4, 0]} maxBarSize={16}>
+                <LabelList dataKey="domainCount" position="right" style={{ fill: 'var(--muted-foreground)', fontSize: 11.5 }} />
+              </Bar>
+              <Bar dataKey="agentCount" name="Con agente (Endpoint Central)" fill={COLOR_AGENT} radius={[0, 4, 4, 0]} maxBarSize={16}>
+                <LabelList dataKey="agentCount" position="right" style={{ fill: 'var(--muted-foreground)', fontSize: 11.5 }} />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -118,7 +170,7 @@ export function VulnDashboardPage() {
   if (error) {
     return (
       <Layout>
-        <h1 className="text-2xl font-semibold">Vulnerabilidades</h1>
+        <h1 className="text-2xl font-semibold">UEM</h1>
         <Alert variant="destructive" className="mt-4">
           <AlertDescription>{error}</AlertDescription>
         </Alert>
@@ -129,7 +181,7 @@ export function VulnDashboardPage() {
   if (!data) {
     return (
       <Layout>
-        <h1 className="text-2xl font-semibold">Vulnerabilidades</h1>
+        <h1 className="text-2xl font-semibold">UEM</h1>
         <p className="mt-4 text-muted-foreground">Cargando…</p>
       </Layout>
     );
@@ -138,7 +190,7 @@ export function VulnDashboardPage() {
   return (
     <Layout>
       <div className="mb-2 flex items-start justify-between gap-4">
-        <h1 className="text-2xl font-semibold">Vulnerabilidades</h1>
+        <h1 className="text-2xl font-semibold">UEM</h1>
         <Button type="button" variant="outline" size="sm" onClick={() => setShareOpen(true)}>
           <Share2 className="size-4" />
           Compartir
@@ -146,7 +198,7 @@ export function VulnDashboardPage() {
       </div>
       <VulnDashboardView data={data} />
 
-      {shareOpen && <ShareDialog dashboardKey="vuln" dashboardLabel="Vulnerabilidades" onClose={() => setShareOpen(false)} />}
+      {shareOpen && <ShareDialog dashboardKey="vuln" dashboardLabel="UEM" onClose={() => setShareOpen(false)} />}
     </Layout>
   );
 }

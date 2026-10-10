@@ -24,7 +24,7 @@ registro de "esto lo vi, no lo tocaba porque no era lo que se pedía".
 - **Ruido de auditoría en otros syncs automáticos.** Se sacó
   `netbackup.*` de la página de Auditoría por generar cientos de
   eventos redundantes con Historial/Bitácora. Los jobs automáticos de
-  AD, Microsoft 365, Veeam y Vulnerabilidades (`ad.sync`, `m365.sync`,
+  AD, Microsoft 365, Veeam y UEM (`ad.sync`, `m365.sync`,
   `backups.sync`, `vuln.sync`) corren con la misma frecuencia
   recurrente y podrían estar generando el mismo tipo de ruido — no se
   revisó puntualmente cuánto volumen representan hoy.

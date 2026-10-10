@@ -64,7 +64,7 @@ const AUDIT_ROUTES = [
   { path: '/audit/m365', module: 'm365', title: 'Microsoft 365' },
   { path: '/audit/ad', module: 'ad', title: 'Active Directory' },
   { path: '/audit/veeam', module: 'veeam', title: 'Veeam' },
-  { path: '/audit/vuln', module: 'vuln', title: 'Vulnerabilidades' },
+  { path: '/audit/vuln', module: 'vuln', title: 'UEM' },
   { path: '/audit/pam360', module: 'pam360', title: 'PAM360' },
 ];
 

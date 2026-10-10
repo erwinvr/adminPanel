@@ -10,6 +10,18 @@ esas, ver `git log`.
 
 ### Corregido
 
+- **UEM (Endpoint Central) → la sincronización decía "éxito" con 0 equipos
+  aunque el API key o la conexión fallaran**: Endpoint Central devuelve
+  HTTP 200 incluso cuando rechaza el pedido (el error va en el cuerpo);
+  ahora se revisa y, si falla, el sync queda registrado como error con el
+  motivo real en vez de "0 equipos, éxito". Además se corrigieron dos
+  errores que impedían traer datos aun con un API key válido: la lista de
+  equipos venía en `message_response.allsystems`, no `allsystemsview` como
+  asumía el código; y "parches pendientes" no es un solo campo sino la
+  suma de Microsoft/terceros/driver/BIOS, con `"--"` en vez de `0` cuando
+  el equipo nunca se escaneó. Confirmado contra un servidor real. Ver
+  [docs/uem.md](docs/uem.md).
+
 - **Dashboard "Servicios M365" mostraba usuarios y sitios de dominios no
   admitidos**: el filtro de dominios de *Microsoft 365 → Configuración* solo
   se aplicaba al guardar el informe de uso durante la sincronización; si los
@@ -97,6 +109,15 @@ esas, ver `git log`.
 
 ### Agregado
 
+- **"Vulnerabilidades" se renombró a "UEM"** (dashboard y sección de
+  configuración, incluido el submenú de Auditoría) para reflejar mejor
+  qué es: gestión unificada de endpoints con ManageEngine Endpoint
+  Central, no solo vulnerabilidades. El dashboard UEM ahora también
+  muestra **cobertura del agente**: equipos en el dominio (Active
+  Directory) vs. equipos con el agente de Endpoint Central instalado,
+  agrupados por sistema operativo — la familia del SO ("Windows Server
+  2022" vs. "Windows 10/11") distingue servidores de equipos de usuario.
+  Ver [docs/uem.md](docs/uem.md).
 - **Reporte "Usuarios de Active Directory"**: nombre, correo, usuario, fecha
   de creación y estado de cada cuenta sincronizada, sin filtros, exportable a
   CSV. La sincronización de AD ahora también lee el atributo `mail` (antes no

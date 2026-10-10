@@ -23,14 +23,27 @@ function toPublicSettings(row) {
   };
 }
 
+// Los campos numéricos de Endpoint Central vienen como number, pero cuando el
+// equipo nunca se escaneó (o ese tipo de parche no aplica) el valor es el
+// string "--" en vez de 0 — Number("--") es NaN, no 0.
+function toCount(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
 // La forma exacta del payload de Endpoint Central puede variar entre
 // builds — se lee de forma defensiva (varios nombres de campo
-// plausibles) en vez de asumir un único shape rígido.
+// plausibles) en vez de asumir un único shape rígido. Confirmado contra
+// el servidor real: no hay un solo campo de "parches faltantes", viene
+// separado por tipo (Microsoft, de terceros, drivers, BIOS) y se suman.
 function normalizeComputer(raw) {
+  const pendingPatchesCount =
+    raw.missingpatchcount ?? raw.missing_patch_count ?? raw.missingPatchesCount ?? toCount(raw.missing_ms_patches) + toCount(raw.missing_tp_patches) + toCount(raw.missing_driver_patches) + toCount(raw.missing_bios_patches);
   return {
     resource_id: String(raw.resource_id ?? raw.resourceid ?? raw.computer_id ?? raw.resourceId ?? raw.computerName),
     computer_name: raw.resource_name ?? raw.computer_name ?? raw.computerName ?? raw.resourcename ?? 'Equipo sin nombre',
-    pending_patches_count: Number(raw.missingpatchcount ?? raw.missing_patch_count ?? raw.missingPatchesCount ?? 0),
+    pending_patches_count: toCount(pendingPatchesCount),
+    os_name: raw.os_name ?? raw.os_platform_name ?? raw.osName ?? null,
   };
 }
 
@@ -109,10 +122,11 @@ export const vulnService = {
   },
 
   async getDashboard() {
-    const [totalComputers, computersWithPending, topComputers] = await Promise.all([
+    const [totalComputers, computersWithPending, topComputers, agentCoverage] = await Promise.all([
       vulnRepository.countComputers(),
       vulnRepository.countComputersWithPendingPatches(),
       vulnRepository.topComputersByPendingPatches(),
+      vulnRepository.agentCoverageByOs(),
     ]);
 
     const pctWithPending = totalComputers > 0 ? Math.round((computersWithPending / totalComputers) * 1000) / 10 : 0;
@@ -123,6 +137,7 @@ export const vulnService = {
       pctWithPending,
       pctUpToDate: Math.round((100 - pctWithPending) * 10) / 10,
       topComputers,
+      agentCoverage,
     };
   },
 };

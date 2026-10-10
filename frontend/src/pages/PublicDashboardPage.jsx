@@ -34,7 +34,7 @@ const DASHBOARD_TITLES = {
   providers: 'Proveedores y recursos',
   'users-insights': 'Usuarios',
   backups: 'Backups',
-  vuln: 'Vulnerabilidades',
+  vuln: 'UEM',
   'network-topology': 'Topología de Red',
   'm365-services': 'Servicios M365',
 };
