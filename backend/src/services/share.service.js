@@ -2,7 +2,7 @@
  * services/share.service.js
  *
  * "Compartir" para los dashboards de solo lectura del panel (Mapa de
- * aplicaciones, Proveedores y recursos, Usuarios, Backups,
+ * aplicaciones, Proveedores y recursos, Active Directory, Backups,
  * Vulnerabilidades y Topología de Red): genera un enlace
  * público con un token de alta entropía que cualquiera puede abrir SIN
  * iniciar sesión — el token ES la autorización, así que nunca se

@@ -109,6 +109,10 @@ esas, ver `git log`.
 
 ### Agregado
 
+- **El dashboard "Usuarios" se renombró a "Active Directory"** y suma un
+  gráfico nuevo: **Top 10 — equipos sin autenticar (90+ días)**, mismo
+  criterio que ya existía para usuarios (días desde el último login en
+  Active Directory, "Nunca" para los que no tienen registro).
 - **"Vulnerabilidades" se renombró a "UEM"** (dashboard y sección de
   configuración, incluido el submenú de Auditoría) para reflejar mejor
   qué es: gestión unificada de endpoints con ManageEngine Endpoint

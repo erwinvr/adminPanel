@@ -2,7 +2,7 @@
  * components/ShareDialog.jsx
  *
  * "Compartir" para los dashboards de solo lectura (Mapa de aplicaciones,
- * Proveedores y recursos, Usuarios, Backups, UEM y Topología
+ * Proveedores y recursos, Active Directory, Backups, UEM y Topología
  * de Red): genera un enlace
  * público que cualquiera puede abrir SIN iniciar sesión — por eso el
  * diálogo es explícito sobre esto (nunca se genera nada sin que quien

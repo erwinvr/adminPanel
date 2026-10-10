@@ -60,15 +60,18 @@ function shortName(user) {
   return user.displayName || user.samAccountName || '—';
 }
 
+function shortComputerName(computer) {
+  return computer.name || computer.dnsHostName || '—';
+}
+
 // "Nunca" no tiene un número de días real para graficar — se le da una
 // barra larga fija (más que cualquier valor real esperable en este
 // top-10) para que se vea como "el peor caso", pero la etiqueta y el
 // tooltip siempre muestran el texto "Nunca", nunca ese número inventado.
 const NEVER_SENTINEL_DAYS = 730;
 
-function toChartRow(user, daysField) {
-  const days = user[daysField];
-  return { name: shortName(user), days: days ?? NEVER_SENTINEL_DAYS, label: days === null ? 'Nunca' : `${days} d` };
+function toChartRow(name, days) {
+  return { name, days: days ?? NEVER_SENTINEL_DAYS, label: days === null ? 'Nunca' : `${days} d` };
 }
 
 /** Barras horizontales de "días desde X" para un top-10 — una sola serie, un solo hue. */
@@ -113,8 +116,9 @@ function StaleUsersChart({ data, dataKey, color, emptyMessage }) {
 export function UserSecurityInsightsView({ data }) {
   const noDataAtAll = data.adUserCount === 0 && data.m365UserCount === 0;
 
-  const passwordRows = data.topStalePasswords.map((u) => toChartRow(u, 'daysSincePasswordChange'));
-  const loginRows = data.topStaleLogins.map((u) => toChartRow(u, 'daysSinceLogin'));
+  const passwordRows = data.topStalePasswords.map((u) => toChartRow(shortName(u), u.daysSincePasswordChange));
+  const loginRows = data.topStaleLogins.map((u) => toChartRow(shortName(u), u.daysSinceLogin));
+  const computerLoginRows = data.topStaleComputerLogins.map((c) => toChartRow(shortComputerName(c), c.daysSinceLogin));
   const compareRows = [
     { name: 'Active Directory', count: data.adUserCount, color: COLOR_AD },
     { name: 'Microsoft 365', count: data.m365UserCount, color: COLOR_M365 },
@@ -168,7 +172,7 @@ export function UserSecurityInsightsView({ data }) {
         </CardContent>
       </Card>
 
-      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Top 10 — sin cambiar contraseña (90+ días)</CardTitle>
@@ -198,6 +202,21 @@ export function UserSecurityInsightsView({ data }) {
             />
           </CardContent>
         </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Top 10 — equipos sin autenticar (90+ días)</CardTitle>
+            <CardDescription>Días desde el último login del equipo en Active Directory</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <StaleUsersChart
+              data={computerLoginRows}
+              dataKey="days"
+              color={COLOR_LOGIN_STALE}
+              emptyMessage="Ningún equipo está atrasado — todos autenticaron en los últimos 90 días."
+            />
+          </CardContent>
+        </Card>
       </div>
     </>
   );
@@ -221,7 +240,7 @@ export function UsersInsightsPage() {
   return (
     <Layout>
       <div className="mb-2 flex items-start justify-between gap-4">
-        <h1 className="text-2xl font-semibold">Usuarios</h1>
+        <h1 className="text-2xl font-semibold">Active Directory</h1>
         {data && (
           <Button type="button" variant="outline" size="sm" onClick={() => setShareOpen(true)}>
             <Share2 className="size-4" />
@@ -244,7 +263,7 @@ export function UsersInsightsPage() {
         <UserSecurityInsightsView data={data} />
       )}
 
-      {shareOpen && <ShareDialog dashboardKey="users-insights" dashboardLabel="Usuarios" onClose={() => setShareOpen(false)} />}
+      {shareOpen && <ShareDialog dashboardKey="users-insights" dashboardLabel="Active Directory" onClose={() => setShareOpen(false)} />}
     </Layout>
   );
 }

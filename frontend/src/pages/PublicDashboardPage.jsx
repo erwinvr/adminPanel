@@ -32,7 +32,7 @@ const NetworkTopologyView = lazy(() => import('./NetworkTopologyPage.jsx').then(
 const DASHBOARD_TITLES = {
   topology: 'Mapa de Aplicaciones',
   providers: 'Proveedores y recursos',
-  'users-insights': 'Usuarios',
+  'users-insights': 'Active Directory',
   backups: 'Backups',
   vuln: 'UEM',
   'network-topology': 'Topología de Red',

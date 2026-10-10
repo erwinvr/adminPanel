@@ -133,7 +133,7 @@ export const PERMISSION_DEFINITIONS = [
   {
     code: PERMISSIONS.INSIGHTS_VIEW,
     module: 'insights',
-    description: 'Ver el dashboard de indicadores de usuarios (higiene de identidad en AD y Microsoft 365)',
+    description: 'Ver el dashboard "Active Directory" (higiene de identidad: usuarios y equipos de AD, y usuarios de Microsoft 365)',
   },
 
   { code: PERMISSIONS.BACKUPS_VIEW, module: 'backups', description: 'Ver el dashboard de backups (jobs y repositorios de Veeam)' },

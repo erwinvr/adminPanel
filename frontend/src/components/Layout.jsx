@@ -55,7 +55,7 @@ import { cn } from '@/lib/utils.js';
 const DASHBOARD_ITEMS = [
   { path: '/topology', label: 'Mapa de aplicaciones', permission: PERMISSIONS.TOPOLOGY_VIEW, icon: Network },
   { path: '/providers', label: 'Proveedores y recursos', permission: PERMISSIONS.PROVIDERS_VIEW, icon: Truck },
-  { path: '/dashboard/users', label: 'Usuarios', permission: PERMISSIONS.INSIGHTS_VIEW, icon: ChartColumn },
+  { path: '/dashboard/users', label: 'Active Directory', permission: PERMISSIONS.INSIGHTS_VIEW, icon: ChartColumn },
   { path: '/backups/dashboard', label: 'Backups', permission: PERMISSIONS.BACKUPS_VIEW, icon: HardDrive },
   { path: '/vuln/dashboard', label: 'UEM', permission: PERMISSIONS.VULN_VIEW, icon: ShieldAlert },
   { path: '/network-topology', label: 'Topología de Red', permission: PERMISSIONS.NETWORK_TOPOLOGY_VIEW, icon: Router },

@@ -1,13 +1,13 @@
 /**
  * services/insights.service.js
  *
- * Indicadores de higiene de identidad para la página "Usuarios" del
- * dashboard: cruza las fotos de sincronización de Active Directory y
- * Microsoft 365 (ad_users / m365_users) — no dispara sincronizaciones
- * ni escribe nada, es puramente de lectura sobre lo que ya está
- * guardado. El umbral de "estancado" (90 días) queda fijo acá, no es
- * configurable desde la UI — si en el futuro hace falta, es el único
- * lugar a tocar.
+ * Indicadores de higiene de identidad para la página "Active Directory"
+ * del dashboard: cruza las fotos de sincronización de Active Directory
+ * (usuarios y equipos) y Microsoft 365 (ad_users / ad_computers /
+ * m365_users) — no dispara sincronizaciones ni escribe nada, es
+ * puramente de lectura sobre lo que ya está guardado. El umbral de
+ * "estancado" (90 días) queda fijo acá, no es configurable desde la UI
+ * — si en el futuro hace falta, es el único lugar a tocar.
  */
 
 import { insightsRepository } from '../repositories/insights.repository.js';
@@ -21,13 +21,14 @@ function daysSince(date) {
 
 export const insightsService = {
   async getUserSecurityInsights() {
-    const [adUserCount, m365UserCount, staleLoginCount, stalePasswordCount, topStalePasswords, topStaleLogins] = await Promise.all([
+    const [adUserCount, m365UserCount, staleLoginCount, stalePasswordCount, topStalePasswords, topStaleLogins, topStaleComputerLogins] = await Promise.all([
       insightsRepository.countAdUsers(),
       insightsRepository.countM365Users(),
       insightsRepository.countAdUsersWithStaleLogin(),
       insightsRepository.countAdUsersWithStalePassword(),
       insightsRepository.topAdUsersByStalePassword(),
       insightsRepository.topAdUsersByStaleLogin(),
+      insightsRepository.topAdComputersByStaleLogin(),
     ]);
 
     return {
@@ -42,6 +43,10 @@ export const insightsService = {
       topStaleLogins: topStaleLogins.map((u) => ({
         ...u,
         daysSinceLogin: daysSince(u.lastLoginAt),
+      })),
+      topStaleComputerLogins: topStaleComputerLogins.map((c) => ({
+        ...c,
+        daysSinceLogin: daysSince(c.lastLoginAt),
       })),
     };
   },

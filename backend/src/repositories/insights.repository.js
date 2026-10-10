@@ -59,4 +59,14 @@ export const insightsRepository = {
       .orderByRaw('last_login_at ASC NULLS FIRST')
       .limit(limit);
   },
+
+  // Mismo criterio que topAdUsersByStaleLogin, pero sobre ad_computers — un
+  // equipo que nunca inició sesión es más urgente que uno de hace 91 días.
+  topAdComputersByStaleLogin(limit = 10) {
+    return db('ad_computers')
+      .select('id', 'name', 'dns_host_name as dnsHostName', 'operating_system as operatingSystem', 'last_login_at as lastLoginAt')
+      .where((qb) => qb.whereNull('last_login_at').orWhere('last_login_at', '<', staleCutoff()))
+      .orderByRaw('last_login_at ASC NULLS FIRST')
+      .limit(limit);
+  },
 };
