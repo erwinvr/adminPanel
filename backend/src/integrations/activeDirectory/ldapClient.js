@@ -19,7 +19,7 @@
 import ldap from 'ldapjs';
 import { AppError } from '../../errors/AppError.js';
 
-const SEARCH_ATTRIBUTES = ['sAMAccountName', 'displayName', 'cn', 'whenCreated', 'lastLogonTimestamp', 'pwdLastSet', 'userAccountControl', 'distinguishedName', 'lockoutTime'];
+const SEARCH_ATTRIBUTES = ['sAMAccountName', 'displayName', 'cn', 'mail', 'whenCreated', 'lastLogonTimestamp', 'pwdLastSet', 'userAccountControl', 'distinguishedName', 'lockoutTime'];
 const USER_FILTER = '(&(objectClass=user)(objectCategory=person))';
 const UAC_ACCOUNT_DISABLED = 0x2;
 const UAC_DONT_EXPIRE_PASSWORD = 0x10000;
@@ -164,6 +164,7 @@ export function searchUsers({ host, port, useTls, bindDn, bindPassword, baseDn }
             distinguishedName: attrValue(entry, 'distinguishedName') ?? entry.objectName,
             samAccountName: attrValue(entry, 'sAMAccountName'),
             displayName: attrValue(entry, 'displayName') ?? attrValue(entry, 'cn'),
+            mail: attrValue(entry, 'mail'),
             createdAt: generalizedTimeToDate(attrValue(entry, 'whenCreated')),
             lastLoginAt: filetimeToDate(attrValue(entry, 'lastLogonTimestamp')),
             passwordLastSetAt: filetimeToDate(attrValue(entry, 'pwdLastSet')),

@@ -149,6 +149,7 @@ export const adService = {
       distinguished_name: u.distinguishedName,
       sam_account_name: u.samAccountName,
       display_name: u.displayName,
+      mail: u.mail,
       ad_created_at: u.createdAt,
       last_login_at: u.lastLoginAt,
       password_last_set_at: u.passwordLastSetAt,

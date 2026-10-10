@@ -79,8 +79,19 @@ esas, ver `git log`.
   (mensaje, código de error y recurso de Veeam) en vez de abortar todo
   sin información.
 
+### Corregido
+
+- **Reportes → el botón "Limpiar filtros" aparecía incluso en reportes sin
+  ningún filtro** (ej. "Usuarios de Active Directory"): ahora solo se muestra
+  cuando el reporte tiene búsqueda, fechas o parámetros.
+
 ### Agregado
 
+- **Reporte "Usuarios de Active Directory"**: nombre, correo, usuario, fecha
+  de creación y estado de cada cuenta sincronizada, sin filtros, exportable a
+  CSV. La sincronización de AD ahora también lee el atributo `mail` (antes no
+  se pedía); en cuentas ya sincronizadas el correo queda vacío hasta la
+  próxima sincronización.
 - **Reportes de backups exitosos**: "Backups de networking exitosos" (una fila por
   ejecución exitosa, filtrable por rango de fechas y exportable a CSV) y "Jobs
   de Veeam con última ejecución exitosa" (Veeam solo entrega la última

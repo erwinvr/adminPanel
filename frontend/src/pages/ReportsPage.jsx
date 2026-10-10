@@ -68,6 +68,7 @@ function ReportViewer({ report, onReset }) {
   const [csvFormat, setCsvFormat] = useState(defaultCsvFormat);
   const [exporting, setExporting] = useState(false);
   const total = meta?.pagination.total;
+  const hasFilters = Boolean(report.searchable || report.dateLabel || report.params.length);
 
   async function handleExport() {
     setExporting(true);
@@ -117,9 +118,11 @@ function ReportViewer({ report, onReset }) {
             />
           </div>
         ))}
-        <Button type="button" variant="ghost" size="sm" onClick={onReset}>
-          Limpiar filtros
-        </Button>
+        {hasFilters && (
+          <Button type="button" variant="ghost" size="sm" onClick={onReset}>
+            Limpiar filtros
+          </Button>
+        )}
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-3">

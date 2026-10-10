@@ -15,11 +15,18 @@ los datos ya sincronizados. Lo que se ve en pantalla es lo que se exporta a CSV.
 | Sitios de SharePoint sin actividad | Sitios sin actividad en N días | Última actividad | Días de inactividad (180) |
 | Backups de networking exitosos | Una fila por ejecución exitosa del backup de configuración (equipo, IP, oficina, inicio, duración, manual/programado) | Inicio de la ejecución (día UTC) | — |
 | Jobs de Veeam con última ejecución exitosa | Jobs cuya última ejecución terminó con éxito | Última ejecución | — |
+| Usuarios de Active Directory | Nombre, correo, usuario, fecha de creación y estado de cada usuario de AD | — | — |
 
-Los cinco primeros son de Microsoft 365. Los de uso (buzones, OneDrive, SharePoint) dependen de `Reports.Read.All` y de
+Los primeros cinco son de Microsoft 365. Los de uso (buzones, OneDrive, SharePoint) dependen de `Reports.Read.All` y de
 que se haya sincronizado Microsoft 365 (ver [microsoft-365.md](microsoft-365.md)).
 
 **Backups:** Backup Networking guarda el historial completo, así que el rango de fechas devuelve todas las ejecuciones exitosas de ese período. Veeam solo informa la **última** ejecución de cada job (no hay historial), por lo que ese reporte muestra una foto del último sync; las horas se muestran en UTC.
+
+"Usuarios de Active Directory" no tiene filtros propios (ni fechas ni
+búsqueda): lista a todos tal cual están sincronizados, y el botón exporta
+esa misma lista completa. El correo (`mail`) se agregó a la sincronización
+de AD junto con este reporte; en cuentas sincronizadas antes de ese cambio
+queda vacío hasta la próxima sincronización.
 
 ## Filtros
 

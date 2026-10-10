@@ -281,6 +281,30 @@ export const REPORTS = [
         ),
     orderBy: [{ column: 'lastRunAt', order: 'desc' }, { column: 'name' }],
   },
+  {
+    key: 'ad-users',
+    title: 'Usuarios de Active Directory',
+    description: 'Listado completo de usuarios sincronizados desde Active Directory: nombre, correo, usuario, fecha de creación y estado.',
+    source: 'Active Directory',
+    dateLabel: null,
+    params: [],
+    columns: [
+      { key: 'displayName', label: 'Nombre', type: 'text' },
+      { key: 'mail', label: 'Correo', type: 'text' },
+      { key: 'username', label: 'Usuario', type: 'text' },
+      { key: 'createdAt', label: 'Fecha de creación', type: 'date' },
+      { key: 'status', label: 'Estado', type: 'text' },
+    ],
+    build: () =>
+      db('ad_users as u').select(
+        'u.display_name as displayName',
+        'u.mail as mail',
+        'u.sam_account_name as username',
+        day('u.ad_created_at', 'createdAt'),
+        db.raw(`case when u.enabled then 'Activo' else 'Inactivo' end as "status"`)
+      ),
+    orderBy: [{ column: 'displayName' }, { column: 'username' }],
+  },
 ];
 
 export function findReport(key) {
