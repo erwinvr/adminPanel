@@ -66,8 +66,15 @@ export const m365Repository = {
    * Resumen de uso de Servicios M365, todo calculado en SQL: los `limit` mayores
    * de buzones / OneDrive / sitios de SharePoint / usuarios y equipos de Teams,
    * más los totales de cada uno.
+   *
+   * `allowedDomains` se vuelve a aplicar acá (además del filtro al guardar el
+   * informe en `refreshUsageReports`) para que el dashboard siempre refleje la
+   * configuración ACTUAL aunque todavía no haya corrido una sincronización
+   * desde que se cambiaron los dominios permitidos. Sitios de SharePoint sin
+   * propietario resoluble (grupo, no un usuario) no se excluyen porque no se
+   * puede saber su dominio — ver domainFilter.js.
    */
-  async getServicesUsage(limit = 10) {
+  async getServicesUsage(limit = 10, allowedDomains) {
     const day = (column, alias) => db.raw(`to_char(${column}, 'YYYY-MM-DD') as "${alias}"`);
     const num = (v) => (v == null ? null : Number(v));
     const withPct = (rows, capacityKey) =>
@@ -76,12 +83,25 @@ export const m365Repository = {
         const capacity = num(r[capacityKey]);
         return { ...r, usedBytes: used, [capacityKey]: capacity, itemCount: num(r.itemCount), fileCount: num(r.fileCount), pctUsed: capacity ? (used / capacity) * 100 : null };
       });
+    const domains = allowedDomains?.length ? allowedDomains.map((d) => d.toLowerCase()) : null;
+    // Dominio = lo que sigue después de la ÚLTIMA "@" (mismo criterio que domainFilter.js,
+    // por los invitados externos con UPN "persona_empresa.com#EXT#@tenant.onmicrosoft.com").
+    const domainOf = (column) => `lower(regexp_replace(${column}, '^.*@', ''))`;
+    // Filtra por dominio permitido; si `allowUnresolved` es true, deja pasar las filas sin
+    // "@" en la columna (ej. sitios de SharePoint cuyo propietario es un grupo).
+    const withDomainFilter = (query, column, { allowUnresolved = false } = {}) => {
+      if (!domains) return query;
+      if (allowUnresolved) return query.whereRaw(`(${column} is null or ${column} not like '%@%' or ${domainOf(column)} = any(?))`, [domains]);
+      return query.whereRaw(`${column} is not null and ${domainOf(column)} = any(?)`, [domains]);
+    };
 
     // Buzones y OneDrive: por usuario, ordenados por espacio usado.
     const storageSection = async (table, extraColumns) => {
       const [totals, top] = await Promise.all([
-        db(table).select(db.raw('count(*) as total'), db.raw('coalesce(sum(storage_used_bytes), 0) as "totalUsedBytes"'), db.raw(`to_char(max(report_date), 'YYYY-MM-DD') as "reportDate"`)).first(),
-        db(table)
+        withDomainFilter(db(table), 'user_principal_name')
+          .select(db.raw('count(*) as total'), db.raw('coalesce(sum(storage_used_bytes), 0) as "totalUsedBytes"'), db.raw(`to_char(max(report_date), 'YYYY-MM-DD') as "reportDate"`))
+          .first(),
+        withDomainFilter(db(table), 'user_principal_name')
           .select('user_principal_name as userPrincipalName', 'display_name as displayName', 'storage_used_bytes as usedBytes', db.raw(`to_char(last_activity_date, 'YYYY-MM-DD') as "lastActivityDate"`), ...extraColumns)
           .orderBy([{ column: 'storage_used_bytes', order: 'desc' }, { column: 'user_principal_name' }])
           .limit(limit),
@@ -96,9 +116,10 @@ export const m365Repository = {
     mailboxes.top = withPct(mailboxes.top, 'quotaBytes');
     onedrive.top = withPct(onedrive.top, 'allocatedBytes');
 
-    // SharePoint: por sitio.
+    // SharePoint: por sitio. Los sitios sin propietario resoluble (grupo) no se filtran por
+    // dominio porque no se puede saber a cuál pertenecen.
     const [spTotals, spTop] = await Promise.all([
-      db('m365_sharepoint_sites')
+      withDomainFilter(db('m365_sharepoint_sites'), 'owner_principal_name', { allowUnresolved: true })
         .select(
           db.raw('count(*) as total'),
           db.raw('coalesce(sum(storage_used_bytes), 0) as "totalUsedBytes"'),
@@ -108,7 +129,7 @@ export const m365Repository = {
           db.raw(`to_char(max(report_date), 'YYYY-MM-DD') as "reportDate"`)
         )
         .first(),
-      db('m365_sharepoint_sites')
+      withDomainFilter(db('m365_sharepoint_sites'), 'owner_principal_name', { allowUnresolved: true })
         .select('owner_display_name as name', 'owner_principal_name as ownerPrincipalName', 'root_web_template as template', 'site_url as siteUrl', 'storage_used_bytes as usedBytes', 'storage_allocated_bytes as allocatedBytes', 'file_count as fileCount', 'page_view_count as pageViewCount', day('last_activity_date', 'lastActivityDate'))
         .orderBy([{ column: 'storage_used_bytes', order: 'desc' }, { column: 'owner_display_name' }])
         .limit(limit),
@@ -125,7 +146,7 @@ export const m365Repository = {
     // Teams: totales por usuario + top de usuarios + equipos (públicos/privados) y top de equipos.
     const activity = 'team_chat_messages + private_chat_messages + calls + meetings';
     const [tuTotals, tuTop, tTotals, tTop] = await Promise.all([
-      db('m365_teams_user_activity')
+      withDomainFilter(db('m365_teams_user_activity'), 'user_principal_name')
         .select(
           db.raw('count(*) as "totalUsers"'),
           db.raw(`count(*) filter (where ${activity} > 0) as "activeUsers"`),
@@ -135,7 +156,7 @@ export const m365Repository = {
           db.raw(`to_char(max(report_date), 'YYYY-MM-DD') as "reportDate"`)
         )
         .first(),
-      db('m365_teams_user_activity')
+      withDomainFilter(db('m365_teams_user_activity'), 'user_principal_name')
         .select('user_principal_name as userPrincipalName', 'team_chat_messages as teamChatMessages', 'private_chat_messages as privateChatMessages', 'calls', 'meetings', db.raw(`(${activity}) as "activity"`), day('last_activity_date', 'lastActivityDate'))
         .whereRaw(`${activity} > 0`)
         .orderBy([{ column: 'activity', order: 'desc' }, { column: 'user_principal_name' }])

@@ -145,10 +145,15 @@ de administrador (sin licencia adicional).
   esto).
 - **Barras** de almacenamiento: verde < 75 %, amarillo ≥ 75 %, rojo ≥ 90 % de
   la cuota del buzón / del espacio asignado.
-- El **filtro de dominios** de la configuración se aplica a los informes por
-  *usuario* (buzones, OneDrive y actividad de Teams), no a sitios de
-  SharePoint ni a equipos, cuyo propietario suele ser un grupo. Las cuentas
-  eliminadas no se incluyen.
+- El **filtro de dominios** de la configuración se aplica a buzones, OneDrive,
+  actividad de Teams por usuario y sitios de SharePoint **con propietario
+  resoluble** (un usuario, no un grupo — un sitio de grupo no se excluye
+  porque no se puede saber a qué dominio pertenece). No se aplica a los
+  equipos de Teams (la entidad "equipo" no tiene un propietario individual).
+  Se evalúa con la configuración **actual** cada vez que se abre el
+  dashboard (no solo al sincronizar), así que un cambio de dominios se nota
+  de inmediato sin esperar el próximo sync. Las cuentas eliminadas no se
+  incluyen.
 - **Nombres ocultos**: en el centro de administración de Microsoft 365
   (*Configuración → Configuración de la organización → Informes*) la casilla
   *"Mostrar nombres de usuario, grupo y sitio ocultos en todos los informes"*

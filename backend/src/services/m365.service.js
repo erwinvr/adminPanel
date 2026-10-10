@@ -318,9 +318,14 @@ export const m365Service = {
     return note;
   },
 
-  /** Top 10 de buzones y de OneDrive por espacio usado, más el aviso de la última descarga. */
+  /**
+   * Top 10 de buzones y de OneDrive por espacio usado, más el aviso de la última descarga.
+   * Aplica los dominios permitidos de la configuración ACTUAL (no la de cuando se descargó
+   * el informe), así que un cambio de dominios se refleja de inmediato sin esperar un sync.
+   */
   async getServicesUsage() {
-    const [usage, settingsRow] = await Promise.all([m365Repository.getServicesUsage(10), m365Repository.getSettings()]);
+    const settingsRow = await m365Repository.getSettings();
+    const usage = await m365Repository.getServicesUsage(10, settingsRow?.allowed_domains);
     return {
       ...usage,
       reportsFetchedAt: settingsRow?.usage_reports_fetched_at ?? null,

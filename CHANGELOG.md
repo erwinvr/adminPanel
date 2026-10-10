@@ -10,6 +10,16 @@ esas, ver `git log`.
 
 ### Corregido
 
+- **Dashboard "Servicios M365" mostraba usuarios y sitios de dominios no
+  admitidos**: el filtro de dominios de *Microsoft 365 → Configuración* solo
+  se aplicaba al guardar el informe de uso durante la sincronización; si los
+  dominios se cambiaban después (o la última foto era de antes del filtro),
+  el dashboard seguía mostrando datos de dominios ya no permitidos hasta el
+  siguiente sync. Ahora el filtro también se aplica al leer (buzones,
+  OneDrive, Teams por usuario y sitios de SharePoint con propietario
+  resoluble), con la configuración de dominios **actual**, así que el
+  dashboard siempre queda consistente con lo configurado sin esperar una
+  sincronización. Ver [docs/microsoft-365.md](docs/microsoft-365.md).
 - **Microsoft 365 → "Sincronizar ahora" fallaba con "Respuesta del servidor
   no válida"**: con el permiso de MFA por usuario, la sincronización tarda
   más de 5 minutos (Microsoft limita esa API a ~2-3 usuarios/s), nginx cortaba
