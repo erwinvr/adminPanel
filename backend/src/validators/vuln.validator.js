@@ -5,4 +5,7 @@ export const saveSettingsSchema = Joi.object({
   // Vacío u omitido = mantener el API key ya guardado (mismo criterio
   // que el resto de las integraciones — ver m365.validator.js).
   apiKey: Joi.string().trim().min(1).max(500).allow('').optional(),
+  // Minutos entre sincronizaciones automáticas — 0/null desactiva el
+  // job en segundo plano para esta integración (ver syncScheduler.js).
+  syncIntervalMinutes: Joi.number().integer().min(0).allow(null).optional(),
 });

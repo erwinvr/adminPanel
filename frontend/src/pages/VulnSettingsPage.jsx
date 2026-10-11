@@ -2,10 +2,11 @@
  * pages/VulnSettingsPage.jsx
  *
  * Parámetros de conexión a ManageEngine Endpoint Central (parches
- * pendientes por equipo) y disparador de sincronización manual — mismo
- * patrón que Active Directory / Microsoft 365 / Backups, pero acá la
- * autenticación es un API key (generado desde la consola de Endpoint
- * Central: Admin → API Key Generation), no usuario/contraseña.
+ * pendientes por equipo), frecuencia de sincronización automática y
+ * disparador de sincronización manual — mismo patrón que Active
+ * Directory / Microsoft 365, pero acá la autenticación es un API key
+ * (generado desde la consola de Endpoint Central: Admin → API Key
+ * Generation), no usuario/contraseña.
  */
 
 import { Layout } from '../components/Layout.jsx';
@@ -14,6 +15,7 @@ import { useSettings } from '../hooks/useSettings.js';
 import { Form } from '../components/Form.jsx';
 import { toast } from 'sonner';
 import { vulnService } from '../services/vuln.service.js';
+import { SYNC_FREQUENCY_OPTIONS } from '../constants/syncFrequency.js';
 import { Alert, AlertDescription } from '@/components/ui/alert.jsx';
 
 export function VulnSettingsPage() {
@@ -51,10 +53,18 @@ export function VulnSettingsPage() {
                   : 'API key',
                 type: 'password',
               },
+              {
+                name: 'syncIntervalMinutes',
+                label: 'Frecuencia de sincronización automática',
+                type: 'select',
+                value: String(settings.syncIntervalMinutes ?? 0),
+                options: SYNC_FREQUENCY_OPTIONS,
+                required: true,
+              },
             ]}
             submitLabel="Guardar configuración"
             onSubmit={async (values) => {
-              await vulnService.saveSettings(values);
+              await vulnService.saveSettings({ ...values, syncIntervalMinutes: Number(values.syncIntervalMinutes) });
               toast.success('Configuración guardada');
               refresh();
             }}
@@ -62,6 +72,7 @@ export function VulnSettingsPage() {
 
           <SyncSection
             lastSyncedAt={settings.lastSyncedAt}
+            syncIntervalMinutes={settings.syncIntervalMinutes}
             canSync={settings.hasApiKey}
             missingCredentialMessage="Guardá la configuración con un API key antes de poder sincronizar."
             onSync={vulnService.sync}

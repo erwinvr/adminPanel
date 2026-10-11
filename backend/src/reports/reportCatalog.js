@@ -20,6 +20,7 @@
 
 import { db } from '../config/database.js';
 import { friendlySkuName } from '../integrations/microsoft365/skuNames.js';
+import { vulnRepository } from '../repositories/vuln.repository.js';
 
 const day = (column, alias) => db.raw(`to_char(${column}, 'YYYY-MM-DD') as "${alias}"`);
 
@@ -304,6 +305,125 @@ export const REPORTS = [
         db.raw(`case when u.enabled then 'Activo' else 'Inactivo' end as "status"`)
       ),
     orderBy: [{ column: 'displayName' }, { column: 'username' }],
+  },
+  {
+    key: 'uem-pending-patches',
+    title: 'Equipos con parches pendientes',
+    description: 'Equipos de UEM (Endpoint Central) con parches pendientes de instalar, de mayor a menor.',
+    source: 'UEM (Endpoint Central)',
+    dateLabel: null,
+    params: [{ name: 'minPending', label: 'Mínimo de parches pendientes', type: 'number', default: 1, min: 0, max: 100000 }],
+    searchColumns: ['v.computer_name', 'v.os_name'],
+    columns: [
+      { key: 'computerName', label: 'Equipo', type: 'text' },
+      { key: 'osName', label: 'Sistema operativo', type: 'text' },
+      { key: 'pendingPatchesCount', label: 'Parches pendientes', type: 'number' },
+      { key: 'syncedAt', label: 'Última sincronización', type: 'date' },
+    ],
+    build: ({ minPending }) =>
+      db('vuln_computers as v')
+        .where('v.pending_patches_count', '>=', minPending)
+        .select('v.computer_name as computerName', 'v.os_name as osName', 'v.pending_patches_count as pendingPatchesCount', day('v.synced_at', 'syncedAt')),
+    orderBy: [{ column: 'pendingPatchesCount', order: 'desc' }, { column: 'computerName' }],
+  },
+  {
+    key: 'uem-critical-patches',
+    title: 'Equipos con parches críticos pendientes',
+    description: 'Equipos de UEM (Endpoint Central) con parches críticos o importantes pendientes — para priorizar sobre el resto.',
+    source: 'UEM (Endpoint Central)',
+    dateLabel: null,
+    params: [{ name: 'minCritical', label: 'Mínimo de parches críticos', type: 'number', default: 1, min: 0, max: 100000 }],
+    searchColumns: ['v.computer_name', 'v.os_name'],
+    columns: [
+      { key: 'computerName', label: 'Equipo', type: 'text' },
+      { key: 'osName', label: 'Sistema operativo', type: 'text' },
+      { key: 'criticalPatchCount', label: 'Parches críticos', type: 'number' },
+      { key: 'importantPatchCount', label: 'Parches importantes', type: 'number' },
+      { key: 'pendingPatchesCount', label: 'Total pendientes', type: 'number' },
+    ],
+    build: ({ minCritical }) =>
+      db('vuln_computers as v')
+        .where('v.critical_patch_count', '>=', minCritical)
+        .select(
+          'v.computer_name as computerName',
+          'v.os_name as osName',
+          'v.critical_patch_count as criticalPatchCount',
+          'v.important_patch_count as importantPatchCount',
+          'v.pending_patches_count as pendingPatchesCount'
+        ),
+    orderBy: [{ column: 'criticalPatchCount', order: 'desc' }, { column: 'importantPatchCount', order: 'desc' }, { column: 'computerName' }],
+  },
+  {
+    key: 'uem-stale-scans',
+    title: 'Equipos sin escanear',
+    description:
+      'Equipos de UEM (Endpoint Central) sin un escaneo de parches exitoso hace más de N días, o que nunca se escanearon — señal de que el agente no está funcionando.',
+    source: 'UEM (Endpoint Central)',
+    dateLabel: 'Último escaneo exitoso',
+    dateExpression: 'v.last_successful_scan::date',
+    params: [{ name: 'staleDays', label: 'Sin escanear hace más de (días)', type: 'number', default: 30, min: 1, max: 3650 }],
+    searchColumns: ['v.computer_name', 'v.os_name'],
+    columns: [
+      { key: 'computerName', label: 'Equipo', type: 'text' },
+      { key: 'osName', label: 'Sistema operativo', type: 'text' },
+      { key: 'pendingPatchesCount', label: 'Parches pendientes', type: 'number' },
+      { key: 'lastSuccessfulScan', label: 'Último escaneo exitoso', type: 'date' },
+    ],
+    build: ({ staleDays }) =>
+      db('vuln_computers as v')
+        .whereRaw('(v.last_successful_scan is null or v.last_successful_scan < now() - make_interval(days => ?::int))', [staleDays])
+        .select(
+          'v.computer_name as computerName',
+          'v.os_name as osName',
+          'v.pending_patches_count as pendingPatchesCount',
+          day('v.last_successful_scan', 'lastSuccessfulScan'),
+          db.raw(`coalesce(v.last_successful_scan, '-infinity'::timestamptz) as "scanSortKey"`)
+        ),
+    orderBy: [{ column: 'scanSortKey' }, { column: 'computerName' }],
+  },
+  {
+    key: 'uem-agent-offline',
+    title: 'Equipos con el agente sin contacto',
+    description:
+      'Equipos de UEM (Endpoint Central) cuyo agente no contactó al servidor hace más de N días, o nunca contactó — agente caído, equipo apagado o desconectado de la red.',
+    source: 'UEM (Endpoint Central)',
+    dateLabel: 'Último contacto del agente',
+    dateExpression: 'v.agent_last_contact_time::date',
+    params: [{ name: 'staleDays', label: 'Sin contacto hace más de (días)', type: 'number', default: 14, min: 1, max: 3650 }],
+    searchColumns: ['v.computer_name', 'v.os_name'],
+    columns: [
+      { key: 'computerName', label: 'Equipo', type: 'text' },
+      { key: 'osName', label: 'Sistema operativo', type: 'text' },
+      { key: 'pendingPatchesCount', label: 'Parches pendientes', type: 'number' },
+      { key: 'agentLastContactTime', label: 'Último contacto del agente', type: 'date' },
+    ],
+    build: ({ staleDays }) =>
+      db('vuln_computers as v')
+        .whereRaw('(v.agent_last_contact_time is null or v.agent_last_contact_time < now() - make_interval(days => ?::int))', [staleDays])
+        .select(
+          'v.computer_name as computerName',
+          'v.os_name as osName',
+          'v.pending_patches_count as pendingPatchesCount',
+          day('v.agent_last_contact_time', 'agentLastContactTime'),
+          db.raw(`coalesce(v.agent_last_contact_time, '-infinity'::timestamptz) as "contactSortKey"`)
+        ),
+    orderBy: [{ column: 'contactSortKey' }, { column: 'computerName' }],
+  },
+  {
+    key: 'uem-agent-coverage',
+    title: 'Cobertura del agente por sistema operativo',
+    description:
+      'Equipos en el dominio (Active Directory) vs. equipos con el agente de Endpoint Central instalado, agrupados por sistema operativo — mismo cruce del gráfico del dashboard UEM, en tabla exportable.',
+    source: 'Active Directory + UEM (Endpoint Central)',
+    dateLabel: null,
+    params: [],
+    columns: [
+      { key: 'family', label: 'Sistema operativo', type: 'text' },
+      { key: 'domainCount', label: 'En el dominio (AD)', type: 'number' },
+      { key: 'agentCount', label: 'Con agente (UEM)', type: 'number' },
+    ],
+    build: () => vulnRepository.agentCoverageQuery(),
+    orderBy: [{ column: 'sortRank' }, { column: 'sortTotal', order: 'desc' }, { column: 'family' }],
   },
 ];
 

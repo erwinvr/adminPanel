@@ -16,9 +16,16 @@ los datos ya sincronizados. Lo que se ve en pantalla es lo que se exporta a CSV.
 | Backups de networking exitosos | Una fila por ejecución exitosa del backup de configuración (equipo, IP, oficina, inicio, duración, manual/programado) | Inicio de la ejecución (día UTC) | — |
 | Jobs de Veeam con última ejecución exitosa | Jobs cuya última ejecución terminó con éxito | Última ejecución | — |
 | Usuarios de Active Directory | Nombre, correo, usuario, fecha de creación y estado de cada usuario de AD | — | — |
+| Equipos con parches pendientes | Equipos de UEM con parches pendientes, de mayor a menor | — | Mínimo de parches pendientes |
+| Equipos con parches críticos pendientes | Equipos de UEM con parches críticos/importantes pendientes | — | Mínimo de parches críticos |
+| Equipos sin escanear | Equipos de UEM sin un escaneo exitoso hace N días (o nunca escaneados) | Último escaneo exitoso | Días sin escanear (30 por defecto) |
+| Equipos con el agente sin contacto | Equipos de UEM cuyo agente no contactó al servidor hace N días (o nunca) | Último contacto del agente | Días sin contacto (14 por defecto) |
+| Cobertura del agente por sistema operativo | Equipos en el dominio (AD) vs. con el agente de UEM, por SO — mismo cruce del gráfico del dashboard UEM | — | — |
 
 Los primeros cinco son de Microsoft 365. Los de uso (buzones, OneDrive, SharePoint) dependen de `Reports.Read.All` y de
-que se haya sincronizado Microsoft 365 (ver [microsoft-365.md](microsoft-365.md)).
+que se haya sincronizado Microsoft 365 (ver [microsoft-365.md](microsoft-365.md)). Los cinco de UEM dependen de que se
+haya sincronizado Endpoint Central (ver [uem.md](uem.md)) — "nunca escaneado"/"nunca contactó" cuenta como el caso más
+urgente y encabeza el ranking.
 
 **Backups:** Backup Networking guarda el historial completo, así que el rango de fechas devuelve todas las ejecuciones exitosas de ese período. Veeam solo informa la **última** ejecución de cada job (no hay historial), por lo que ese reporte muestra una foto del último sync; las horas se muestran en UTC.
 

@@ -109,6 +109,19 @@ esas, ver `git log`.
 
 ### Agregado
 
+- **5 reportes de UEM** en *Reportes*: equipos con parches pendientes,
+  equipos con parches críticos pendientes, equipos sin escanear, equipos
+  con el agente sin contacto, y cobertura del agente por sistema operativo
+  (la misma tabla del gráfico del dashboard UEM, exportable). El sync de
+  UEM ahora también guarda el último escaneo exitoso, el último contacto
+  del agente y el desglose de parches críticos/importantes (campos que
+  Endpoint Central ya entregaba y no se guardaban). Ver
+  [docs/uem.md](docs/uem.md).
+- **UEM → Configuración ahora tiene sincronización automática** (mismo
+  campo de frecuencia que Active Directory / Microsoft 365: manual, cada
+  15/30/60 min, 6/12/24 h), sin perder el botón "Sincronizar ahora". El
+  job en segundo plano (`syncScheduler.js`) ya revisa UEM junto con las
+  demás integraciones.
 - **El dashboard "Usuarios" se renombró a "Active Directory"** y suma un
   gráfico nuevo: **Top 10 — equipos sin autenticar (90+ días)**, mismo
   criterio que ya existía para usuarios (días desde el último login en

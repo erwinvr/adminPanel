@@ -1,9 +1,13 @@
 # UEM (ManageEngine Endpoint Central)
 
-*UEM → Configuración* guarda la URL del servidor y un API key (Admin →
-API Key Generation en Endpoint Central); *Dashboard → UEM* muestra, por
-equipo, la cantidad de parches pendientes (`vuln_computers.pending_patches_count`)
-y la cobertura del agente (ver abajo).
+*UEM → Configuración* guarda la URL del servidor, un API key (Admin →
+API Key Generation en Endpoint Central) y la frecuencia de
+sincronización automática (igual que Active Directory / Microsoft 365;
+0/manual la desactiva — `vuln_settings.sync_interval_minutes`, revisado
+por `jobs/syncScheduler.js`), además del botón "Sincronizar ahora" de
+siempre. *Dashboard → UEM* muestra, por equipo, la cantidad de parches
+pendientes (`vuln_computers.pending_patches_count`) y la cobertura del
+agente (ver abajo).
 
 ## Particularidades de la API de Endpoint Central (REST 1.4)
 
@@ -59,17 +63,33 @@ el gráfico tenga sentido (típicamente no coinciden 1 a 1: AD tiene
 equipos que nunca llevaron el agente, y el agente puede estar en
 equipos fuera del dominio).
 
+## Reportes de UEM (sección Reportes)
+
+*Reportes* tiene 5 reportes de UEM (ver [reports.md](reports.md)):
+equipos con parches pendientes, equipos con parches críticos
+pendientes, equipos sin escanear, equipos con el agente sin contacto, y
+la cobertura del agente por SO (la misma tabla del gráfico del
+dashboard, exportable). "Sin escanear"/"sin contacto" usan
+`last_successful_scan` y `agent_last_contact_time` — un equipo que
+nunca escaneó o nunca contactó cuenta como el caso más urgente
+(`NULL` encabeza el ranking, igual que "Nunca" en los reportes de AD).
+
+No se usó `computer_live_status` (agente online/offline "en vivo")
+para el reporte de "sin contacto": ManageEngine no documenta
+públicamente sus valores posibles, así que se prefirió el timestamp de
+último contacto — objetivo, sin ambigüedad de interpretación — sobre
+un código de estado que podría leerse mal.
+
 ## Otros datos disponibles en `patch/allsystems` (no usados hoy)
 
 Por equipo, además de lo que ya se guarda (nombre, parches pendientes,
-`os_name`): `ip_address`, `mac_address`, `domain_netbios_name`,
-`fqdn_name`, `agent_logged_on_users`, `branch_office_name`,
-`last_scan_time` / `last_successful_scan` / `agent_last_contact_time`
-(epoch ms), `scan_status` / `scan_remarks`, `computer_live_status`
-(agente online/offline), `resource_health_status`, y el desglose de
-severidad `critical_patch_count` / `important_patch_count` /
+`os_name`, escaneo, contacto del agente, parches críticos/importantes):
+`ip_address`, `mac_address`, `domain_netbios_name`, `fqdn_name`,
+`agent_logged_on_users`, `branch_office_name`, `scan_remarks`,
+`computer_live_status` (agente online/offline — ver nota arriba),
+`resource_health_status`, y el desglose de severidad
 `moderate_patch_count` / `low_patch_count`. Se podría ampliar el
-dashboard con esto si hace falta.
+dashboard/los reportes con esto si hace falta.
 
 ## Otros endpoints de Patch Management (existen en este servidor, no se usan)
 
