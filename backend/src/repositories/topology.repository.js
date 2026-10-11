@@ -3,7 +3,7 @@ import { db } from '../config/database.js';
 export const topologyRepository = {
   listNodes() {
     return db('topology_nodes')
-      .select('id', 'column_index as col', 'name', 'sub', 'color')
+      .select('id', 'column_index as col', 'name', 'sub', 'color', 'ip_address as ipAddress')
       .orderBy(['column_index', 'created_at']);
   },
 
@@ -31,17 +31,18 @@ export const topologyRepository = {
       .then((r) => Number(r.count));
   },
 
-  createNode({ columnIndex, name, sub, color, actorId }) {
+  createNode({ columnIndex, name, sub, color, ipAddress, actorId }) {
     return db('topology_nodes')
       .insert({
         column_index: columnIndex,
         name,
         sub: sub || null,
         color: color || null,
+        ip_address: ipAddress || null,
         created_by: actorId,
         updated_by: actorId,
       })
-      .returning(['id', 'column_index as col', 'name', 'sub', 'color'])
+      .returning(['id', 'column_index as col', 'name', 'sub', 'color', 'ip_address as ipAddress'])
       .then(([row]) => row);
   },
 
@@ -49,7 +50,7 @@ export const topologyRepository = {
     return db('topology_nodes')
       .where({ id })
       .update({ ...changes, updated_by: actorId, updated_at: db.fn.now() })
-      .returning(['id', 'column_index as col', 'name', 'sub', 'color'])
+      .returning(['id', 'column_index as col', 'name', 'sub', 'color', 'ip_address as ipAddress'])
       .then(([row]) => row);
   },
 

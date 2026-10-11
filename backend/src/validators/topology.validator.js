@@ -9,6 +9,10 @@ export const createNodeSchema = Joi.object({
     .pattern(/^#[0-9a-fA-F]{6}$/)
     .optional()
     .messages({ 'string.pattern.base': 'El color debe ser un hex de 6 dígitos, ej. #e5484d' }),
+  // Solo tiene sentido para Servidor/Instancia (columnIndex 3) — el
+  // formulario la oculta para el resto, pero igual se valida acá como una
+  // IP válida si se manda.
+  ipAddress: Joi.string().ip().allow('', null).optional(),
 });
 
 export const updateNodeSchema = Joi.object({
@@ -18,6 +22,7 @@ export const updateNodeSchema = Joi.object({
     .trim()
     .pattern(/^#[0-9a-fA-F]{6}$/)
     .allow(null, ''),
+  ipAddress: Joi.string().ip().allow('', null),
 }).min(1);
 
 export const createEdgeSchema = Joi.object({

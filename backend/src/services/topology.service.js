@@ -14,6 +14,20 @@ import { recordEvent } from '../audit/audit.service.js';
 import { NotFoundError, ValidationError, ConflictError } from '../errors/AppError.js';
 
 const MAX_COLUMN_INDEX = 4;
+const COL_APP = 1;
+const COL_DC = 4;
+
+// Una Aplicación nunca va directo a un Datacenter/Nube — "aplicación" sin
+// un Servidor/Instancia de por medio no es una ubicación física real (el
+// mapa ya no la dibujaría como contención aunque existiera la conexión, ver
+// TopologyPage.jsx). Se bloquea acá para no depender solo de que el
+// formulario no la ofrezca.
+function assertNotAppDatacenter(from, to) {
+  const cols = new Set([from.column_index, to.column_index]);
+  if (cols.has(COL_APP) && cols.has(COL_DC)) {
+    throw new ValidationError('Una Aplicación no puede conectarse directo a un Datacenter/Nube — tiene que ser a través de un Servidor/Instancia');
+  }
+}
 
 export const topologyService = {
   async getGraph() {
@@ -21,7 +35,7 @@ export const topologyService = {
     return { nodes, edges };
   },
 
-  async createNode(req, { columnIndex, name, sub, color }) {
+  async createNode(req, { columnIndex, name, sub, color, ipAddress }) {
     if (columnIndex < 0 || columnIndex > MAX_COLUMN_INDEX) {
       throw new ValidationError('Columna fuera de rango');
     }
@@ -34,10 +48,11 @@ export const topologyService = {
           name,
           sub: sub || null,
           color: color || null,
+          ip_address: ipAddress || null,
           created_by: actorId,
           updated_by: actorId,
         })
-        .returning(['id', 'column_index as col', 'name', 'sub', 'color']);
+        .returning(['id', 'column_index as col', 'name', 'sub', 'color', 'ip_address as ipAddress']);
 
       await recordEvent({
         userId: actorId,
@@ -64,12 +79,13 @@ export const topologyService = {
     if (changes.name !== undefined) dbChanges.name = changes.name;
     if (changes.sub !== undefined) dbChanges.sub = changes.sub || null;
     if (changes.color !== undefined) dbChanges.color = changes.color || null;
+    if (changes.ipAddress !== undefined) dbChanges.ip_address = changes.ipAddress || null;
 
     const updated = await db.transaction(async (trx) => {
       const result = await trx('topology_nodes')
         .where({ id })
         .update({ ...dbChanges, updated_by: actorId, updated_at: trx.fn.now() })
-        .returning(['id', 'column_index as col', 'name', 'sub', 'color'])
+        .returning(['id', 'column_index as col', 'name', 'sub', 'color', 'ip_address as ipAddress'])
         .then(([row]) => row);
 
       await recordEvent({
@@ -119,6 +135,7 @@ export const topologyService = {
       topologyRepository.findNodeById(toNodeId),
     ]);
     if (!from || !to) throw new NotFoundError('Alguno de los nodos no existe');
+    assertNotAppDatacenter(from, to);
 
     const exists = await topologyRepository.edgeExists(fromNodeId, toNodeId);
     if (exists) throw new ConflictError('Esa conexión ya existe');
@@ -164,6 +181,7 @@ export const topologyService = {
       topologyRepository.findNodeById(toNodeId),
     ]);
     if (!from || !to) throw new NotFoundError('Alguno de los nodos no existe');
+    assertNotAppDatacenter(from, to);
 
     if (fromNodeId !== existing.from_node_id || toNodeId !== existing.to_node_id) {
       const exists = await topologyRepository.edgeExists(fromNodeId, toNodeId);

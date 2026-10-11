@@ -1,21 +1,43 @@
 /**
  * pages/TopologyPage.jsx
  *
- * Mapa de topología (Criticidad → Aplicación → Base de Datos →
- * Servidor → Datacenter/Nube), persistido en PostgreSQL vía la misma
- * API/sesión/RBAC del resto del panel.
+ * Mapa de topología, persistido en PostgreSQL vía la misma API/sesión/RBAC
+ * del resto del panel.
  *
- * Es un DASHBOARD de solo visualización + gestión de conexiones entre
- * cajas ya existentes (resaltar, conectar, desconectar). El alta, baja
- * y modificación de las cajas en sí vive en el ABM de
- * TopologyAdminPage.jsx (topology.edit) — así el mapa no se satura de
- * controles de edición de cajas.
+ * MODELO VISUAL (contención, no 5 columnas planas):
+ *  - Izquierda: lista plana de Aplicación (como antes), con un punto de
+ *    color como ícono de Criticidad (de qué nodo "Crítico/Alto/Medio/Bajo"
+ *    está conectada) en vez de una columna aparte.
+ *  - Derecha: Datacenter / Nube contiene Servidor / Instancia, que a su vez
+ *    contiene la(s) Base(s) de Datos y/o Aplicación(es) conectadas DIRECTO
+ *    a él. Una Base de Datos también puede estar directo en un Datacenter
+ *    (sin Servidor de por medio). IMPORTANTE: una Aplicación NUNCA se anida
+ *    directo en un Datacenter — "aplicación" sin un Servidor de por medio
+ *    no es una ubicación física real, el único camino de una Aplicación
+ *    hacia un Datacenter es a través de un Servidor. Si existe una
+ *    conexión directa Aplicación↔Datacenter (o Aplicación↔Base de Datos,
+ *    "usa"), nunca anida — se dibuja como línea entre dondequiera que haya
+ *    quedado cada caja (misma lista/contenedor o no). Antes sí anidaba y
+ *    eso mostraba una Aplicación dentro de un Datacenter/Servidor con el
+ *    que en realidad no tenía la conexión que parecía — reportado y
+ *    corregido dos veces (primero "usa" por transitividad, después la
+ *    conexión directa Aplicación↔Datacenter).
+ *  - NO es un árbol estricto: una Base de Datos, un Servidor o una
+ *    Aplicación pueden aparecer REPETIDOS si tienen más de una conexión
+ *    directa (ej. una BD en dos Servidores, o una Aplicación en dos
+ *    Servidores) — a propósito, para que algo replicado en dos lugares se
+ *    vea en los dos.
+ *  - El modelo de datos NO cambió (nodos + conexiones libres entre
+ *    cualquier par de cajas, ver topology_nodes/topology_edges): esto es
+ *    pura reinterpretación de cómo se DIBUJAN esas conexiones. "Editar
+ *    conexiones" (⇄) sigue siendo la única forma de decir "esta caja vive
+ *    en/usa aquella" — no hay una línea de contención para arrastrar ni
+ *    para hacer clic y borrar (solo las líneas no-contención siguen
+ *    siendo clicables para eliminar, igual que antes).
  *
- * Dibujado con React Flow (@xyflow/react): cada caja queda fija en la
- * columna de su categoría (no se puede arrastrar — la posición
- * horizontal ES la categoría) apiladas verticalmente, con pan/zoom
- * real. Los encabezados de columna son nodos más (no un <div> aparte)
- * para que se muevan junto con el resto al hacer pan/zoom.
+ * Dibujado con React Flow (@xyflow/react) usando nodos padre/hijo
+ * (`parentId` + `extent: 'parent'`) para la contención — sigue siendo la
+ * misma librería, con pan/zoom real.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -48,16 +70,175 @@ import { COLUMNS } from '../constants/topology.js';
 import { Button } from '@/components/ui/button.jsx';
 import { cn } from '@/lib/utils.js';
 
-const NODE_WIDTH = 190;
-const COL_GAP_X = 250;
+// Índices de columna (ver constants/topology.js) — se siguen usando para
+// interpretar las conexiones ya guardadas, aunque el mapa ya no las dibuje
+// como 5 columnas paralelas.
+const COL_CRIT = 0;
+const COL_APP = 1;
+const COL_DB = 2;
+const COL_SERVER = 3;
+const COL_DC = 4;
+
+const NODE_WIDTH = 190; // ancho de las cajas de Aplicación (lista de la izquierda)
 const ROW_GAP_Y = 76;
 const HEADER_ID_PREFIX = '__header_';
+
+// Geometría de la contención del lado derecho.
+const NEST_WIDTH = 172;
+const NEST_HEIGHT = 46;
+const NEST_GAP = 8;
+const NEST_PADDING = 10;
+const NEST_HEADER = 24;
+const DC_GAP = 24;
+const RIGHT_COL_X = NODE_WIDTH + 90;
+
+/** IDs de los nodos conectados a `nodeId` en cualquier sentido (una conexión no distingue "hospeda a" de "usa a" a nivel de dato). */
+function neighborsOf(nodeId, edges) {
+  return edges.filter((e) => e.from === nodeId || e.to === nodeId).map((e) => (e.from === nodeId ? e.to : e.from));
+}
+
+/** El nodo de Criticidad (Crítico/Alto/Medio/Bajo) al que está conectada una Aplicación, si tiene uno. */
+function criticalityOf(appId, nodeById, edges) {
+  const critId = neighborsOf(appId, edges).find((id) => nodeById.get(id)?.col === COL_CRIT);
+  if (!critId) return null;
+  const n = nodeById.get(critId);
+  return { name: n.name, color: n.color || COLUMNS[COL_CRIT].color };
+}
+
+/**
+ * Arma el árbol de contención del lado derecho (ver comentario grande al
+ * principio del archivo) a partir de los nodos y conexiones ya guardados —
+ * sin red/estado, función pura, fácil de razonar y de volver a correr cada
+ * vez que cambian los datos.
+ *
+ * Importante: una caja SOLO se anida donde tiene una conexión DIRECTA (App↔
+ * Servidor, App↔Datacenter, BD↔Servidor, BD↔Datacenter, Servidor↔Datacenter).
+ * "Usa" (App↔BD) NO es contención — nunca anida una Aplicación dentro del
+ * contenedor de su Base de Datos solo porque la usa; esa relación se dibuja
+ * aparte, como línea, sin importar dónde haya quedado cada caja (ver
+ * `usaEdgesFor` en TopologyMapView). Si no fuera así, una app aparecería
+ * dentro de un Datacenter/Servidor con el que en realidad no tiene ninguna
+ * conexión — justo el error reportado y corregido acá.
+ */
+function buildContainment(nodes, edges) {
+  const nodeById = new Map(nodes.map((n) => [n.id, n]));
+  const usedServerIds = new Set();
+  const usedDbIds = new Set();
+
+  function leafData(n, kind) {
+    return { kind, refId: n.id, label: n.name, sub: n.sub, color: n.color || COLUMNS[n.col].color, ipAddress: n.ipAddress };
+  }
+
+  // Hijos DIRECTOS de un Servidor: sus Bases de Datos y las Aplicaciones
+  // conectadas a él — un Servidor SÍ es un lugar válido para alojar
+  // cualquiera de las dos.
+  function childrenOfServer(serverId, pathKey) {
+    const dbChildren = neighborsOf(serverId, edges)
+      .filter((id) => nodeById.get(id)?.col === COL_DB)
+      .map((dbId) => {
+        usedDbIds.add(dbId);
+        return { id: `${pathKey}__db_${dbId}`, ...leafData(nodeById.get(dbId), 'db') };
+      });
+    const appChildren = neighborsOf(serverId, edges)
+      .filter((id) => nodeById.get(id)?.col === COL_APP)
+      .map((appId) => ({ id: `${pathKey}__app_${appId}`, ...leafData(nodeById.get(appId), 'app') }));
+    return [...dbChildren, ...appChildren];
+  }
+
+  // Hijos directos de un Datacenter/Nube que NO pasan por un Servidor: solo
+  // Bases de Datos. Una Aplicación NUNCA se anida directo en un Datacenter
+  // aunque tenga una conexión a él — "aplicación" sin un Servidor de por
+  // medio no es una ubicación física real, así que esa conexión (si existe)
+  // se dibuja como línea en vez de contención (ver más abajo, junto con "usa").
+  function dbChildrenOfDc(dcId, pathKey) {
+    return neighborsOf(dcId, edges)
+      .filter((id) => nodeById.get(id)?.col === COL_DB)
+      .map((dbId) => {
+        usedDbIds.add(dbId);
+        return { id: `${pathKey}__db_${dbId}`, ...leafData(nodeById.get(dbId), 'db') };
+      });
+  }
+
+  function serverNode(serverId, parentKey) {
+    usedServerIds.add(serverId);
+    const key = `${parentKey}__srv_${serverId}`;
+    return { id: key, ...leafData(nodeById.get(serverId), 'server'), children: childrenOfServer(serverId, key) };
+  }
+
+  const tree = nodes
+    .filter((n) => n.col === COL_DC)
+    .map((dc) => {
+      const key = `dc_${dc.id}`;
+      const serverChildren = neighborsOf(dc.id, edges)
+        .filter((id) => nodeById.get(id)?.col === COL_SERVER)
+        .map((id) => serverNode(id, key));
+      const directChildren = dbChildrenOfDc(dc.id, key);
+      return { id: key, ...leafData(dc, 'dc'), children: [...serverChildren, ...directChildren] };
+    });
+
+  // Huérfanos: Servidores sin Datacenter y Bases de Datos que no quedaron
+  // alcanzadas por ningún Servidor ni Datacenter — para que nada del mapa
+  // desaparezca solo por faltar una conexión de "dónde vive".
+  const orphanServers = nodes.filter((n) => n.col === COL_SERVER && !usedServerIds.has(n.id)).map((n) => serverNode(n.id, 'orphan'));
+  const orphanDbs = nodes
+    .filter((n) => n.col === COL_DB && !usedDbIds.has(n.id))
+    .map((n) => ({ id: `orphan__db_${n.id}`, ...leafData(n, 'db') }));
+  const orphanChildren = [...orphanServers, ...orphanDbs];
+  if (orphanChildren.length) {
+    tree.push({ id: 'dc_orphan', kind: 'dc', refId: null, label: 'Sin Datacenter / Nube asignado', sub: null, color: 'var(--muted-foreground)', children: orphanChildren });
+  }
+
+  return tree;
+}
+
+// Mide (de abajo hacia arriba) y ubica (de arriba hacia abajo) cada caja del
+// árbol de contención — un contenedor crece para que entren sus hijos,
+// apilados en una sola columna vertical, mismo criterio simple que ya usa
+// la lista de Aplicación.
+function measure(node) {
+  if (!node.children) {
+    node._w = NEST_WIDTH;
+    node._h = NEST_HEIGHT;
+    return;
+  }
+  node.children.forEach(measure);
+  node._w = node.children.length ? Math.max(NEST_WIDTH, ...node.children.map((c) => c._w)) + NEST_PADDING * 2 : NEST_WIDTH;
+  node._h = NEST_HEADER + NEST_PADDING * 2 + node.children.reduce((sum, c) => sum + c._h, 0) + NEST_GAP * Math.max(0, node.children.length - 1);
+}
+
+function place(node) {
+  if (!node.children) return;
+  let y = NEST_HEADER + NEST_PADDING;
+  for (const child of node.children) {
+    child._x = NEST_PADDING;
+    child._y = y;
+    y += child._h + NEST_GAP;
+    place(child);
+  }
+}
+
+function flattenTree(node, parentId, extra, out) {
+  out.push({
+    id: node.id,
+    type: node.children ? 'topologyGroup' : 'topologyNested',
+    position: { x: node._x ?? 0, y: node._y ?? 0 },
+    parentId,
+    extent: parentId ? 'parent' : undefined,
+    draggable: false,
+    selectable: true,
+    zIndex: node.children ? 0 : 2,
+    style: { width: node._w, height: node._h },
+    data: { kind: node.kind, refId: node.refId, label: node.label, sub: node.sub, color: node.color, ipAddress: node.ipAddress, ...extra(node) },
+  });
+  (node.children ?? []).forEach((c) => flattenTree(c, node.id, extra, out));
+}
 
 function TopologyNode({ data }) {
   return (
     <div
       className={cn(
-        'group flex w-full flex-col gap-0.5 rounded-md border bg-card px-3 py-2 shadow-sm transition-all duration-150',
+        'group flex w-full flex-col gap-0.5 rounded-md border bg-card shadow-sm transition-all duration-150',
+        data.compact ? 'px-2 py-1' : 'px-3 py-2',
         data.dimmed && 'opacity-30'
       )}
       style={{
@@ -74,7 +255,14 @@ function TopologyNode({ data }) {
       <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
       <div className="flex items-start justify-between gap-1">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1 truncate text-sm font-semibold">
+          <div className={cn('flex items-center gap-1 truncate font-semibold', data.compact ? 'text-xs' : 'text-sm')}>
+            {data.criticality && (
+              <span
+                className="inline-block size-2 shrink-0 rounded-full"
+                style={{ backgroundColor: data.criticality.color }}
+                title={`Criticidad: ${data.criticality.name}`}
+              />
+            )}
             <span className="truncate">{data.label}</span>
             {data.hasVaultCredential && (
               <Lock
@@ -117,6 +305,52 @@ function TopologyNode({ data }) {
   );
 }
 
+/** Contenedor de Datacenter/Nube o Servidor/Instancia — solo encabezado + borde; los hijos los posiciona React Flow encima (nodos padre/hijo, no DOM anidado). */
+function TopologyGroupNode({ data }) {
+  return (
+    <div
+      className={cn('group flex h-full w-full flex-col rounded-md border-2 border-dashed bg-card/40 transition-opacity duration-150', data.dimmed && 'opacity-30')}
+      style={{ borderColor: data.isSelected ? 'var(--primary)' : data.color }}
+    >
+      <div className="flex shrink-0 items-start justify-between gap-1 px-2 py-1">
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[11px] font-semibold tracking-wide uppercase" style={{ color: data.color }}>
+            {data.label}
+          </div>
+          {data.sub && <div className="truncate font-mono text-[10px] text-muted-foreground">{data.sub}</div>}
+          {data.ipAddress && <div className="truncate font-mono text-[10px] text-muted-foreground">{data.ipAddress}</div>}
+        </div>
+        <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+          <button
+            type="button"
+            title="Ver información del proveedor"
+            className="rounded text-muted-foreground hover:text-primary"
+            onClick={(event) => {
+              event.stopPropagation();
+              data.onShowInfo();
+            }}
+          >
+            <Info className="size-3" />
+          </button>
+          {data.canEdit && (
+            <button
+              type="button"
+              title="Editar conexiones"
+              className="rounded text-muted-foreground hover:text-primary"
+              onClick={(event) => {
+                event.stopPropagation();
+                data.onManageConnections();
+              }}
+            >
+              <ArrowLeftRight className="size-3" />
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TopologyHeaderNode({ data }) {
   return (
     <div
@@ -128,7 +362,7 @@ function TopologyHeaderNode({ data }) {
   );
 }
 
-const nodeTypes = { topology: TopologyNode, topologyHeader: TopologyHeaderNode };
+const nodeTypes = { topology: TopologyNode, topologyNested: TopologyNode, topologyGroup: TopologyGroupNode, topologyHeader: TopologyHeaderNode };
 
 /**
  * Envuelve <ReactFlow> + sus paneles. Vive DENTRO de <ReactFlowProvider>
@@ -174,7 +408,7 @@ function TopologyCanvas({
       proOptions={{ hideAttribution: true }}
       onNodeClick={(_, node) => {
         if (node.id.startsWith(HEADER_ID_PREFIX)) return;
-        onNodeSelect(node.id);
+        onNodeSelect(node.data.refId);
       }}
       onEdgeClick={canEdit ? (_, edge) => onEdgeDelete(edge.id) : undefined}
       onPaneClick={onClearSelection}
@@ -199,6 +433,7 @@ function TopologyCanvas({
                   {COLUMNS[selectedNode.col].title}
                   {selectedNode.sub ? ` — ${selectedNode.sub}` : ''}
                 </div>
+                {selectedNode.ipAddress && <div className="font-mono text-xs text-muted-foreground">{selectedNode.ipAddress}</div>}
               </div>
               <button
                 type="button"
@@ -247,6 +482,10 @@ function TopologyCanvas({
 export function TopologyMapView({ graph, providers, providersError, vaultNodeIds, canEdit, onRefresh }) {
   const confirm = useConfirm();
 
+  // Siempre guarda el ID REAL del nodo (refId), nunca el ID sintético de una
+  // instancia anidada — así una Base de Datos repetida en dos Servidores
+  // se resalta/selecciona como UNA sola cosa sin importar en cuál copia
+  // se hizo clic.
   const [selectedNodeId, setSelectedNodeId] = useState(null);
   const [showInfo, setShowInfo] = useState(false);
   const [connectionsTarget, setConnectionsTarget] = useState(null);
@@ -282,7 +521,8 @@ export function TopologyMapView({ graph, providers, providersError, vaultNodeIds
     return map;
   }, [providers]);
 
-  const selectedNode = useMemo(() => graph.nodes.find((n) => n.id === selectedNodeId) ?? null, [graph.nodes, selectedNodeId]);
+  const nodeById = useMemo(() => new Map(graph.nodes.map((n) => [n.id, n])), [graph.nodes]);
+  const selectedNode = useMemo(() => nodeById.get(selectedNodeId) ?? null, [nodeById, selectedNodeId]);
 
   function handleOpenConnections(node) {
     const hasOthers = graph.nodes.some((n) => n.id !== node.id);
@@ -305,63 +545,137 @@ export function TopologyMapView({ graph, providers, providersError, vaultNodeIds
     }
   }
 
+  // Props comunes a cualquier caja (flat o anidada): resaltado, selección,
+  // candado de bóveda y los dos manejadores de ícono — todo resuelto por
+  // el ID REAL (refId), para que una caja repetida se comporte como una
+  // sola en toda la UI.
+  function interactiveProps(refId, kind) {
+    const node = nodeById.get(refId);
+    return {
+      dimmed: Boolean(selectedNodeId) && !isRelated(refId),
+      isSelected: selectedNodeId === refId,
+      canEdit,
+      hasVaultCredential: kind === 'app' && vaultNodeIds.has(refId),
+      criticality: kind === 'app' ? criticalityOf(refId, nodeById, graph.edges) : null,
+      onManageConnections: () => node && handleOpenConnections(node),
+      onShowInfo: () => node && handleShowInfo(node),
+    };
+  }
+
   const flowNodes = useMemo(() => {
     const rowByColumn = new Map();
-    const headers = COLUMNS.map((c, ci) => ({
+    const appNodes = graph.nodes.filter((n) => n.col === COL_APP);
+    const dcCount = graph.nodes.filter((n) => n.col === COL_DC).length;
+
+    // Árbol de contención del lado derecho (Datacenter ⊃ Servidor ⊃ {BD, App},
+    // SOLO conexiones directas — ver buildContainment) — se mide ANTES de armar
+    // los encabezados porque el de la derecha necesita saber cuánto ocupa.
+    const tree = buildContainment(graph.nodes, graph.edges);
+    tree.forEach(measure);
+    const rightWidth = tree.length ? Math.max(...tree.map((t) => t._w)) : NODE_WIDTH;
+
+    const headers = [
+      { ci: COL_APP, x: 0, width: NODE_WIDTH },
+      { ci: COL_DC, x: RIGHT_COL_X, width: Math.max(NODE_WIDTH, rightWidth) },
+    ].map(({ ci, x, width }) => ({
       id: `${HEADER_ID_PREFIX}${ci}`,
       type: 'topologyHeader',
-      position: { x: ci * COL_GAP_X, y: -56 },
-      data: { label: c.title, color: c.color, count: graph.nodes.filter((n) => n.col === ci).length },
+      position: { x, y: -56 },
+      data: { label: COLUMNS[ci].title, color: COLUMNS[ci].color, count: ci === COL_DC ? dcCount : appNodes.length },
       draggable: false,
       selectable: false,
       connectable: false,
-      style: { width: NODE_WIDTH },
+      style: { width },
       zIndex: 1,
     }));
 
-    const boxes = graph.nodes.map((n) => {
+    // Toda caja con un refId de Aplicación o Base de Datos (lista plana +
+    // cada instancia anidada) — para poder dibujar la línea "usa" entre
+    // dondequiera que haya quedado cada una, sea o no el mismo contenedor
+    // (ver comentario de buildContainment: "usa" nunca anida).
+    const instancesByRefId = new Map();
+    const addInstance = (refId, instanceId) => {
+      if (!instancesByRefId.has(refId)) instancesByRefId.set(refId, []);
+      instancesByRefId.get(refId).push(instanceId);
+    };
+
+    const appBoxes = appNodes.map((n) => {
       const row = rowByColumn.get(n.col) ?? 0;
       rowByColumn.set(n.col, row + 1);
+      addInstance(n.id, n.id);
       return {
         id: n.id,
         type: 'topology',
-        position: { x: n.col * COL_GAP_X, y: row * ROW_GAP_Y },
-        data: {
-          label: n.name,
-          sub: n.sub,
-          color: n.color || COLUMNS[n.col].color,
-          dimmed: Boolean(selectedNodeId) && !isRelated(n.id),
-          isSelected: selectedNodeId === n.id,
-          canEdit,
-          hasVaultCredential: vaultNodeIds.has(n.id),
-          onManageConnections: () => handleOpenConnections(n),
-          onShowInfo: () => handleShowInfo(n),
-        },
+        position: { x: 0, y: row * ROW_GAP_Y },
+        data: { label: n.name, sub: n.sub, color: n.color || COLUMNS[n.col].color, compact: false, ...interactiveProps(n.id, 'app') },
         draggable: false,
         style: { width: NODE_WIDTH },
       };
     });
 
-    return [...headers, ...boxes];
+    const nestedBoxes = [];
+    let y = 0;
+    for (const dc of tree) {
+      dc._x = RIGHT_COL_X;
+      dc._y = y;
+      place(dc);
+      flattenTree(dc, undefined, (n) => interactiveProps(n.refId, n.kind), nestedBoxes);
+      y += dc._h + DC_GAP;
+    }
+    // Las cajas anidadas (db/app) son más chicas — se marcan acá, después de
+    // flattenTree, para no repetir la lógica de interactiveProps por tipo.
+    // También se registra cada Datacenter/Nube (para poder dibujar la línea
+    // de una Aplicación conectada DIRECTO a él, sin Servidor de por medio —
+    // esa conexión nunca anida, ver buildContainment).
+    for (const box of nestedBoxes) {
+      if (box.type === 'topologyNested') {
+        box.data.compact = true;
+        addInstance(box.data.refId, box.id);
+      } else if (box.data.kind === 'dc') {
+        addInstance(box.data.refId, box.id);
+      }
+    }
+
+    // Líneas que NUNCA son contención, se dibujan entre TODAS las instancias
+    // de cada lado (lista plana + cada copia anidada), estén o no en el
+    // mismo contenedor:
+    //  - "usa" (Aplicación → Base de Datos): la app puede estar lejos de su
+    //    BD en el lienzo si no tiene conexión directa con su Servidor/
+    //    Datacenter — la línea lo deja igual de claro (o más) que anidarla.
+    //  - Aplicación → Datacenter/Nube DIRECTO (sin Servidor de por medio):
+    //    nunca anida (ver buildContainment) — si existe esa conexión, se
+    //    dibuja igual, como línea, en vez de perderse en silencio.
+    const usaEdges = [];
+    for (const e of graph.edges) {
+      const fromNode = nodeById.get(e.from);
+      const toNode = nodeById.get(e.to);
+      if (!fromNode || !toNode) continue;
+      const appId = fromNode.col === COL_APP ? fromNode.id : toNode.col === COL_APP ? toNode.id : null;
+      if (!appId) continue;
+      const otherNode = fromNode.col === COL_APP ? toNode : fromNode;
+      if (otherNode.col !== COL_DB && otherNode.col !== COL_DC) continue;
+      for (const source of instancesByRefId.get(appId) ?? []) {
+        for (const target of instancesByRefId.get(otherNode.id) ?? []) {
+          usaEdges.push({ id: `${e.id}__${source}__${target}`, source, target, fromRefId: appId, toRefId: otherNode.id });
+        }
+      }
+    }
+
+    return { headers, appBoxes, nestedBoxes, usaEdges, rightWidth };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [graph.nodes, selectedNodeId, isRelated, canEdit, vaultNodeIds]);
+  }, [graph.nodes, graph.edges, selectedNodeId, isRelated, canEdit, vaultNodeIds, nodeById]);
 
   const flowEdges = useMemo(
     () =>
-      graph.edges.map((e) => {
-        const fromNode = graph.nodes.find((n) => n.id === e.from);
+      flowNodes.usaEdges.map((e) => {
+        const related = Boolean(selectedNodeId) && (e.fromRefId === selectedNodeId || e.toRefId === selectedNodeId);
+        const fromNode = nodeById.get(e.fromRefId);
         const color = (fromNode && (fromNode.color || COLUMNS[fromNode.col].color)) || '#999';
-        const related = Boolean(selectedNodeId) && (e.from === selectedNodeId || e.to === selectedNodeId);
         return {
           id: e.id,
-          source: e.from,
-          target: e.to,
+          source: e.source,
+          target: e.target,
           type: 'smoothstep',
-          // El "flujo" animado (línea punteada en movimiento) se ve
-          // en TODAS las conexiones por defecto — cuando hay una caja
-          // seleccionada, las NO relacionadas la pierden (se dejan
-          // estáticas, opacas al 10%) para que el ojo se vaya directo
-          // a la cadena activa.
           className: !selectedNodeId || related ? 'topology-edge-flow' : undefined,
           style: {
             stroke: related ? 'var(--primary)' : color,
@@ -375,21 +689,21 @@ export function TopologyMapView({ graph, providers, providersError, vaultNodeIds
           markerEnd: { type: MarkerType.ArrowClosed, color: related ? '#00d4b5' : color },
         };
       }),
-    [graph.edges, graph.nodes, selectedNodeId]
+    [flowNodes.usaEdges, selectedNodeId, nodeById]
   );
 
   return (
     <>
       <p className="topology-page__hint">
         {canEdit
-          ? 'Clic en una caja para resaltar sus conexiones. Usá el ícono ℹ️ para ver su proveedor y el ícono ⇄ para editar con qué otras se conecta. Clic en una línea para eliminarla.'
+          ? 'Clic en una caja para resaltar sus conexiones. Usá el ícono ℹ️ para ver su proveedor y el ícono ⇄ para decir en qué Servidor/Datacenter vive o qué Base de Datos usa. Clic en una línea "usa" para eliminarla.'
           : 'Clic en una caja para resaltar sus conexiones. Usá el ícono ℹ️ para ver su proveedor. Modo solo lectura — no tienes permiso de edición sobre este mapa.'}
       </p>
 
       <div className="h-[70vh] min-h-[480px] rounded-md border bg-card">
         <ReactFlowProvider>
           <TopologyCanvas
-            flowNodes={flowNodes}
+            flowNodes={[...flowNodes.headers, ...flowNodes.appBoxes, ...flowNodes.nestedBoxes]}
             flowEdges={flowEdges}
             graphNodes={graph.nodes}
             selectedNode={selectedNode}
@@ -397,12 +711,12 @@ export function TopologyMapView({ graph, providers, providersError, vaultNodeIds
             providersError={providersError}
             providersByNodeId={providersByNodeId}
             canEdit={canEdit}
-            onNodeSelect={(id) => {
+            onNodeSelect={(refId) => {
               // Clic en la caja en sí: solo resalta conexiones. Si había
               // un cuadro de información abierto (de esta u otra caja),
               // se cierra — el ℹ️ es el único que lo vuelve a abrir.
               setShowInfo(false);
-              setSelectedNodeId((cur) => (cur === id ? null : id));
+              setSelectedNodeId((cur) => (cur === refId ? null : refId));
             }}
             onEdgeDelete={handleDeleteEdge}
             onClearSelection={() => {
@@ -505,9 +819,11 @@ function ConnectionsManagerModal({ node, graph, onClose, onSaved }) {
     graph.edges.filter((e) => e.from === node.id || e.to === node.id).map((e) => (e.from === node.id ? e.to : e.from))
   );
 
-  const groups = COLUMNS.map((c, ci) => ({ ci, title: c.title, nodes: graph.nodes.filter((n) => n.col === ci && n.id !== node.id) })).filter(
-    (g) => g.nodes.length
-  );
+  // Aplicación↔Datacenter/Nube nunca es una conexión válida (solo a través
+  // de un Servidor/Instancia) — ni se ofrece acá ni la acepta el backend.
+  const groups = COLUMNS.map((c, ci) => ({ ci, title: c.title, nodes: graph.nodes.filter((n) => n.col === ci && n.id !== node.id) }))
+    .filter((g) => g.nodes.length)
+    .filter((g) => !((node.col === COL_APP && g.ci === COL_DC) || (node.col === COL_DC && g.ci === COL_APP)));
 
   const fields = groups.map((g) => ({
     name: `col_${g.ci}`,

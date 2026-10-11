@@ -35,6 +35,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 // Radix <Select.Item> no admite value="" — se usa este valor de reemplazo
 // para representar "todas las categorías" en el filtro.
 const ALL_CATEGORIES = '__all__';
+// Índice de columna de "Servidor / Instancia" (ver constants/topology.js) —
+// la única categoría con el atributo "Dirección IP".
+const COL_SERVER = 3;
 
 export function TopologyAdminPage() {
   const { hasPermission } = useAuth();
@@ -129,6 +132,7 @@ export function TopologyAdminPage() {
             { key: 'col', label: 'Categoría', render: (r) => COLUMNS[r.col].title },
             { key: 'name', label: 'Nombre' },
             { key: 'sub', label: 'Detalle', render: (r) => (r.sub ? escapeHtml(r.sub) : '—') },
+            { key: 'ipAddress', label: 'Dirección IP', render: (r) => (r.col === COL_SERVER && r.ipAddress ? escapeHtml(r.ipAddress) : '—') },
             {
               key: 'color',
               label: 'Color',
@@ -224,6 +228,7 @@ function NodeFormModal({ existing, nodes, onClose, onSaved }) {
             fields={[
               { name: 'name', label: 'Nombre', value: existing?.name, required: true },
               { name: 'sub', label: 'Detalle (opcional)', value: existing?.sub },
+              ...(col === COL_SERVER ? [{ name: 'ipAddress', label: 'Dirección IP (opcional)', value: existing?.ipAddress }] : []),
               { name: 'color', label: 'Color (hex, opcional, ej. #2E74B5)', value: existing?.color },
             ]}
             submitLabel={isEdit ? 'Guardar cambios' : 'Crear caja'}
@@ -232,13 +237,15 @@ function NodeFormModal({ existing, nodes, onClose, onSaved }) {
               if (!name) return;
               const sub = (values.sub || '').trim();
               const color = (values.color || '').trim();
+              const ipAddress = col === COL_SERVER ? (values.ipAddress || '').trim() : undefined;
 
               if (isEdit) {
-                await topologyService.updateNode(existing.id, { name, sub, color });
+                await topologyService.updateNode(existing.id, { name, sub, color, ...(ipAddress !== undefined ? { ipAddress } : {}) });
                 toast.success('Caja actualizada');
               } else {
                 const payload = { columnIndex: col, name, sub };
                 if (color) payload.color = color;
+                if (ipAddress) payload.ipAddress = ipAddress;
                 await topologyService.createNode(payload);
                 toast.success('Caja creada');
               }

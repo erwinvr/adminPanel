@@ -8,6 +8,31 @@ esas, ver `git log`.
 
 ## [Unreleased]
 
+### Cambiado
+
+- **Mapa de Aplicaciones: se dibuja por contención, no por 5 columnas
+  planas.** Ahora son dos: *Aplicación* (lista, como antes, con un punto
+  de color como ícono de Criticidad en vez de columna aparte) y
+  *Datacenter / Nube*, donde cada Datacenter contiene sus Servidor /
+  Instancia (y, directo, sus Bases de Datos sin Servidor de por medio), y
+  cada Servidor contiene las Bases de Datos y Aplicaciones conectadas
+  DIRECTO a él — así se ve de un vistazo dónde vive cada cosa. Una
+  Aplicación NUNCA se anida directo en un Datacenter (sin un Servidor de
+  por medio no es una ubicación física real) ni por usar una Base de
+  Datos que esté ahí — "usa" (Aplicación → Base de Datos) se dibuja como
+  línea entre dondequiera que haya quedado cada caja, nunca como
+  contención. La conexión directa Aplicación↔Datacenter/Nube ya no se
+  puede crear (ni se ofrece en "editar conexiones" ni la acepta el
+  backend) — nunca es una relación real, siempre es a través de un
+  Servidor/Instancia. Una Base de Datos, un Servidor o una Aplicación
+  pueden aparecer repetidos si tienen más de una conexión directa (ej.
+  una BD en dos Servidores). El modelo de datos no cambió — "editar
+  conexiones" (⇄) sigue siendo la única forma de decir dónde vive o qué
+  usa cada caja.
+- **Servidor / Instancia tiene un atributo "Dirección IP"** (opcional,
+  valida formato de IP), editable desde "Administrar cajas" y visible en
+  el mapa y en el panel de información — solo para esa categoría.
+
 ### Corregido
 
 - **UEM (Endpoint Central) → la sincronización decía "éxito" con 0 equipos
