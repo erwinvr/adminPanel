@@ -26,6 +26,7 @@ import { Input } from '@/components/ui/input.jsx';
 import { Label } from '@/components/ui/label.jsx';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select.jsx';
 import { escapeHtml } from '@/lib/escapeHtml.js';
+import { downloadBlob } from '@/lib/downloadBlob.js';
 import { formatBytes } from '@/lib/formatBytes.js';
 import { formatDay } from '@/lib/formatDay.js';
 import { cn } from '@/lib/utils.js';
@@ -47,17 +48,6 @@ const cellRenderers = {
 };
 
 const tableColumns = (report) => report.columns.map((c) => ({ key: c.key, label: c.label, render: (row) => cellRenderers[c.type](row[c.key]) }));
-
-function downloadBlob({ blob, filename }) {
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
 
 function ReportViewer({ report, onReset }) {
   const defaults = Object.fromEntries(report.params.map((p) => [p.name, p.default]));

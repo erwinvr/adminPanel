@@ -11,27 +11,48 @@ esas, ver `git log`.
 ### Cambiado
 
 - **Mapa de Aplicaciones: se dibuja por contención, no por 5 columnas
-  planas.** Ahora son dos: *Aplicación* (lista, como antes, con un punto
-  de color como ícono de Criticidad en vez de columna aparte) y
-  *Datacenter / Nube*, donde cada Datacenter contiene sus Servidor /
-  Instancia (y, directo, sus Bases de Datos sin Servidor de por medio), y
-  cada Servidor contiene las Bases de Datos y Aplicaciones conectadas
-  DIRECTO a él — así se ve de un vistazo dónde vive cada cosa. Una
+  planas ni por una lista de Aplicación aparte.** Ahora es un solo árbol:
+  *Datacenter / Nube* contiene sus Servidor / Instancia (y, directo, sus
+  Bases de Datos sin Servidor de por medio), y cada Servidor contiene las
+  Bases de Datos y Aplicaciones conectadas DIRECTO a él (con un punto de
+  color como ícono de Criticidad) — así se ve de un vistazo dónde vive
+  cada cosa. Una Aplicación **sin ninguna conexión directa a un Servidor
+  no aparece en el mapa** (sigue existiendo: se ve en "Administrar cajas"
+  y se le pueden crear conexiones desde cualquier otra caja). Una
   Aplicación NUNCA se anida directo en un Datacenter (sin un Servidor de
   por medio no es una ubicación física real) ni por usar una Base de
   Datos que esté ahí — "usa" (Aplicación → Base de Datos) se dibuja como
   línea entre dondequiera que haya quedado cada caja, nunca como
-  contención. La conexión directa Aplicación↔Datacenter/Nube ya no se
-  puede crear (ni se ofrece en "editar conexiones" ni la acepta el
-  backend) — nunca es una relación real, siempre es a través de un
-  Servidor/Instancia. Una Base de Datos, un Servidor o una Aplicación
-  pueden aparecer repetidos si tienen más de una conexión directa (ej.
-  una BD en dos Servidores). El modelo de datos no cambió — "editar
-  conexiones" (⇄) sigue siendo la única forma de decir dónde vive o qué
-  usa cada caja.
+  contención (si la Aplicación no aparece en ningún lado, tampoco hay
+  línea). La conexión directa Aplicación↔Datacenter/Nube ya no se puede
+  crear (ni se ofrece en "editar conexiones" ni la acepta el backend) —
+  nunca es una relación real, siempre es a través de un Servidor/
+  Instancia. Una Base de Datos, un Servidor o una Aplicación pueden
+  aparecer repetidos si tienen más de una conexión directa (ej. una BD en
+  dos Servidores). Los Datacenter/Nube se ubican uno al lado del otro
+  (horizontal), no apilados. El modelo de datos no cambió — "editar conexiones"
+  (⇄) sigue siendo la única forma de decir dónde vive o qué usa cada
+  caja.
 - **Servidor / Instancia tiene un atributo "Dirección IP"** (opcional,
   valida formato de IP), editable desde "Administrar cajas" y visible en
   el mapa y en el panel de información — solo para esa categoría.
+
+### Agregado
+
+- **"Administrar cajas" (Aplicaciones) → buscador por nombre**, y **alta
+  masiva por CSV**: "Descargar plantilla" baja un CSV con las columnas
+  esperadas (Categoría, Nombre, Criticidad, Detalle, Dirección IP, Color) y
+  un ejemplo por categoría; "Importar" sube un CSV con ese formato y crea
+  las cajas. Solo crea — una fila con la misma categoría y nombre que una
+  caja ya existente se cuenta como omitida y no se pisa. La columna
+  "Criticidad" (solo para filas de Aplicación) conecta la app nueva con el
+  nivel de Criticidad ya existente con ese nombre — no crea niveles
+  nuevos; las demás conexiones (en qué Servidor vive, qué Base de Datos
+  usa) se siguen cargando desde "editar conexiones" en el mapa. Cada fila
+  inválida (categoría no reconocida, color/IP con formato inválido, nivel
+  de Criticidad que no es uno de los 4 fijos, que ya existe o que todavía
+  no se creó) se reporta con su número de fila sin bloquear al resto del
+  archivo.
 
 ### Corregido
 

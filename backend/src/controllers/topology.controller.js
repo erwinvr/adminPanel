@@ -10,6 +10,11 @@ export async function createNode(req, res) {
   res.status(201).json({ success: true, data: node });
 }
 
+export async function importNodes(req, res) {
+  const result = await topologyService.importNodes(req, req.body.csv);
+  res.status(200).json({ success: true, data: result });
+}
+
 export async function updateNode(req, res) {
   const node = await topologyService.updateNode(req, req.params.id, req.body);
   res.status(200).json({ success: true, data: node });

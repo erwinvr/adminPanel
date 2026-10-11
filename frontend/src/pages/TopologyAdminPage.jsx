@@ -29,8 +29,10 @@ import { Button } from '@/components/ui/button.jsx';
 import { Input } from '@/components/ui/input.jsx';
 import { Label } from '@/components/ui/label.jsx';
 import { escapeHtml } from '@/lib/escapeHtml.js';
+import { downloadBlob } from '@/lib/downloadBlob.js';
 import { Alert, AlertDescription } from '@/components/ui/alert.jsx';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select.jsx';
+import { Download, Upload } from 'lucide-react';
 
 // Radix <Select.Item> no admite value="" — se usa este valor de reemplazo
 // para representar "todas las categorías" en el filtro.
@@ -38,6 +40,21 @@ const ALL_CATEGORIES = '__all__';
 // Índice de columna de "Servidor / Instancia" (ver constants/topology.js) —
 // la única categoría con el atributo "Dirección IP".
 const COL_SERVER = 3;
+
+// Mismas columnas que espera topologyService.importNodes en el backend
+// (ver topology.service.js#importNodes) — Categoría tiene que ser uno de
+// los títulos de COLUMNS (sin importar mayúsculas/tildes).
+const CSV_TEMPLATE = [
+  'Categoria,Nombre,Criticidad,Detalle,Direccion IP,Color',
+  'Aplicación,ERP (ejemplo — reemplazar o borrar),Alto,Sistema de gestión,,',
+  'Base de Datos,MariaDB (ejemplo — reemplazar o borrar),,nombre_bd,,',
+  'Servidor / Instancia,VM Ejemplo (reemplazar o borrar),,,10.0.0.5,',
+  'Datacenter / Nube,Azure (ejemplo — reemplazar o borrar),,Cloud,,',
+].join('\r\n');
+
+function downloadTemplate() {
+  downloadBlob({ blob: new Blob(['﻿' + CSV_TEMPLATE], { type: 'text/csv;charset=utf-8' }), filename: 'plantilla-cajas-mapa.csv' });
+}
 
 export function TopologyAdminPage() {
   const { hasPermission } = useAuth();
@@ -48,7 +65,9 @@ export function TopologyAdminPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [categoryFilter, setCategoryFilter] = useState('');
+  const [search, setSearch] = useState('');
   const [formTarget, setFormTarget] = useState(undefined); // undefined = closed, null = create, object = edit
+  const [importOpen, setImportOpen] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -67,7 +86,9 @@ export function TopologyAdminPage() {
     refresh();
   }, [refresh]);
 
-  const filtered = categoryFilter === '' ? nodes : nodes.filter((n) => String(n.col) === categoryFilter);
+  const filtered = (categoryFilter === '' ? nodes : nodes.filter((n) => String(n.col) === categoryFilter)).filter((n) =>
+    n.name.toLowerCase().includes(search.trim().toLowerCase())
+  );
   const sorted = [...filtered].sort((a, b) => a.col - b.col || a.name.localeCompare(b.name));
 
   const actions = [];
@@ -103,21 +124,42 @@ export function TopologyAdminPage() {
         Datacenter/Nube). Las conexiones entre cajas se gestionan desde el mapa de topología.
       </p>
 
-      <div className="my-4 flex items-center justify-between gap-3">
-        <Select value={categoryFilter === '' ? ALL_CATEGORIES : categoryFilter} onValueChange={(v) => setCategoryFilter(v === ALL_CATEGORIES ? '' : v)}>
-          <SelectTrigger className="w-56">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL_CATEGORIES}>Todas las categorías</SelectItem>
-            {COLUMNS.map((c, i) => (
-              <SelectItem key={i} value={String(i)}>
-                {c.title}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {canEdit && <Button onClick={() => setFormTarget(null)}>+ Nueva caja</Button>}
+      <div className="my-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <Select value={categoryFilter === '' ? ALL_CATEGORIES : categoryFilter} onValueChange={(v) => setCategoryFilter(v === ALL_CATEGORIES ? '' : v)}>
+            <SelectTrigger className="w-56">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL_CATEGORIES}>Todas las categorías</SelectItem>
+              {COLUMNS.map((c, i) => (
+                <SelectItem key={i} value={String(i)}>
+                  {c.title}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Input
+            type="search"
+            placeholder="Buscar por nombre…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-60"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={downloadTemplate}>
+            <Download className="size-4" />
+            Descargar plantilla
+          </Button>
+          {canEdit && (
+            <Button type="button" variant="outline" size="sm" onClick={() => setImportOpen(true)}>
+              <Upload className="size-4" />
+              Importar
+            </Button>
+          )}
+          {canEdit && <Button onClick={() => setFormTarget(null)}>+ Nueva caja</Button>}
+        </div>
       </div>
 
       {loading ? (
@@ -152,6 +194,16 @@ export function TopologyAdminPage() {
           onClose={() => setFormTarget(undefined)}
           onSaved={() => {
             setFormTarget(undefined);
+            refresh();
+          }}
+        />
+      )}
+
+      {importOpen && (
+        <ImportModal
+          onClose={() => setImportOpen(false)}
+          onImported={() => {
+            setImportOpen(false);
             refresh();
           }}
         />
@@ -253,6 +305,91 @@ function NodeFormModal({ existing, nodes, onClose, onSaved }) {
             }}
           />
         )}
+      </div>
+    </Modal>
+  );
+}
+
+/**
+ * Importa cajas desde un CSV (ver "Descargar plantilla" y
+ * topology.service.js#importNodes en el backend, que valida cada fila).
+ * Solo crea — una fila que ya existe (misma categoría + nombre) se cuenta
+ * como omitida, no se pisa nada.
+ */
+function ImportModal({ onClose, onImported }) {
+  const [file, setFile] = useState(null);
+  const [importing, setImporting] = useState(false);
+  const [result, setResult] = useState(null);
+
+  async function handleImport() {
+    if (!file) return;
+    setImporting(true);
+    setResult(null);
+    try {
+      const csv = await file.text();
+      const res = await topologyService.importNodes(csv);
+      setResult(res);
+      if (res.created > 0) toast.success(`${res.created} caja${res.created === 1 ? '' : 's'} creada${res.created === 1 ? '' : 's'}`);
+      else if (!res.errors.length) toast.info('No había nada nuevo para crear');
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  return (
+    <Modal title="Importar cajas desde CSV" onClose={onClose}>
+      <div className="flex flex-col gap-4">
+        <p className="topology-page__hint">
+          Usá la plantilla ("Descargar plantilla", en la pantalla anterior) para saber el formato esperado. Solo crea
+          cajas nuevas — una fila con la misma categoría y nombre que una caja ya existente se omite, no la pisa. La
+          columna "Criticidad" solo aplica a filas de Aplicación: conecta la app nueva con el nivel indicado (Crítico /
+          Alto / Medio / Bajo, tienen que existir ya) — no crea niveles de Criticidad nuevos. Las demás conexiones (en
+          qué Servidor vive, qué Base de Datos usa) se siguen cargando desde "editar conexiones" en el mapa.
+        </p>
+
+        <div className="flex flex-col gap-1.5">
+          <Label>Archivo CSV</Label>
+          <Input
+            type="file"
+            accept=".csv,text/csv"
+            onChange={(e) => {
+              setFile(e.target.files?.[0] ?? null);
+              setResult(null);
+            }}
+          />
+        </div>
+
+        {result && (
+          <Alert variant={result.errors.length ? 'warning' : 'success'}>
+            <AlertDescription>
+              <p>
+                {result.created} creada{result.created === 1 ? '' : 's'}
+                {result.edgesCreated > 0 && ` (${result.edgesCreated} con su Criticidad conectada)`}, {result.skipped} omitida
+                {result.skipped === 1 ? '' : 's'} (ya existían), {result.errors.length} con error.
+              </p>
+              {result.errors.length > 0 && (
+                <ul className="mt-2 max-h-40 list-disc overflow-y-auto pl-5">
+                  {result.errors.map((e) => (
+                    <li key={e.row}>
+                      Fila {e.row}: {e.message}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </AlertDescription>
+          </Alert>
+        )}
+
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="ghost" onClick={result ? onImported : onClose}>
+            {result ? 'Listo' : 'Cancelar'}
+          </Button>
+          <Button type="button" onClick={handleImport} disabled={!file || importing}>
+            {importing ? 'Importando…' : 'Importar'}
+          </Button>
+        </div>
       </div>
     </Modal>
   );

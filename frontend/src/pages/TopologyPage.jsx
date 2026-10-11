@@ -4,24 +4,23 @@
  * Mapa de topología, persistido en PostgreSQL vía la misma API/sesión/RBAC
  * del resto del panel.
  *
- * MODELO VISUAL (contención, no 5 columnas planas):
- *  - Izquierda: lista plana de Aplicación (como antes), con un punto de
- *    color como ícono de Criticidad (de qué nodo "Crítico/Alto/Medio/Bajo"
- *    está conectada) en vez de una columna aparte.
- *  - Derecha: Datacenter / Nube contiene Servidor / Instancia, que a su vez
- *    contiene la(s) Base(s) de Datos y/o Aplicación(es) conectadas DIRECTO
- *    a él. Una Base de Datos también puede estar directo en un Datacenter
- *    (sin Servidor de por medio). IMPORTANTE: una Aplicación NUNCA se anida
- *    directo en un Datacenter — "aplicación" sin un Servidor de por medio
- *    no es una ubicación física real, el único camino de una Aplicación
- *    hacia un Datacenter es a través de un Servidor. Si existe una
- *    conexión directa Aplicación↔Datacenter (o Aplicación↔Base de Datos,
- *    "usa"), nunca anida — se dibuja como línea entre dondequiera que haya
- *    quedado cada caja (misma lista/contenedor o no). Antes sí anidaba y
- *    eso mostraba una Aplicación dentro de un Datacenter/Servidor con el
- *    que en realidad no tenía la conexión que parecía — reportado y
- *    corregido dos veces (primero "usa" por transitividad, después la
- *    conexión directa Aplicación↔Datacenter).
+ * MODELO VISUAL (contención, un solo árbol — sin lista de Aplicación aparte):
+ *  - Datacenter / Nube contiene Servidor / Instancia, que a su vez contiene
+ *    la(s) Base(s) de Datos y/o Aplicación(es) conectadas DIRECTO a él (con
+ *    un punto de color como ícono de Criticidad en la Aplicación). Una Base
+ *    de Datos también puede estar directo en un Datacenter (sin Servidor de
+ *    por medio). No hay una lista aparte de Aplicación: una Aplicación
+ *    SOLO aparece en el mapa si tiene una conexión directa a un Servidor —
+ *    si no tiene ninguna, no se dibuja (sigue existiendo, se ve en
+ *    "Administrar cajas" y en "editar conexiones" de cualquier otra caja).
+ *  - IMPORTANTE: una Aplicación NUNCA se anida directo en un Datacenter —
+ *    "aplicación" sin un Servidor de por medio no es una ubicación física
+ *    real, el único camino de una Aplicación hacia un Datacenter es a
+ *    través de un Servidor; esa conexión directa ni se puede crear (ver
+ *    ConnectionsManagerModal y topology.service.js#assertNotAppDatacenter).
+ *    "Usa" (Aplicación↔Base de Datos) tampoco anida nunca — se dibuja como
+ *    línea entre dondequiera que haya quedado cada caja (si la Aplicación
+ *    no aparece en ningún lado, tampoco hay línea que dibujar).
  *  - NO es un árbol estricto: una Base de Datos, un Servidor o una
  *    Aplicación pueden aparecer REPETIDOS si tienen más de una conexión
  *    directa (ej. una BD en dos Servidores, o una Aplicación en dos
@@ -32,8 +31,8 @@
  *    pura reinterpretación de cómo se DIBUJAN esas conexiones. "Editar
  *    conexiones" (⇄) sigue siendo la única forma de decir "esta caja vive
  *    en/usa aquella" — no hay una línea de contención para arrastrar ni
- *    para hacer clic y borrar (solo las líneas no-contención siguen
- *    siendo clicables para eliminar, igual que antes).
+ *    para hacer clic y borrar (solo las líneas "usa" siguen siendo
+ *    clicables para eliminar, igual que antes).
  *
  * Dibujado con React Flow (@xyflow/react) usando nodos padre/hijo
  * (`parentId` + `extent: 'parent'`) para la contención — sigue siendo la
@@ -79,18 +78,16 @@ const COL_DB = 2;
 const COL_SERVER = 3;
 const COL_DC = 4;
 
-const NODE_WIDTH = 190; // ancho de las cajas de Aplicación (lista de la izquierda)
-const ROW_GAP_Y = 76;
+const NODE_WIDTH = 190; // ancho mínimo del encabezado/lienzo
 const HEADER_ID_PREFIX = '__header_';
 
-// Geometría de la contención del lado derecho.
+// Geometría de la contención (Datacenter ⊃ Servidor ⊃ {BD, App}).
 const NEST_WIDTH = 172;
 const NEST_HEIGHT = 46;
 const NEST_GAP = 8;
 const NEST_PADDING = 10;
 const NEST_HEADER = 24;
 const DC_GAP = 24;
-const RIGHT_COL_X = NODE_WIDTH + 90;
 
 /** IDs de los nodos conectados a `nodeId` en cualquier sentido (una conexión no distingue "hospeda a" de "usa a" a nivel de dato). */
 function neighborsOf(nodeId, edges) {
@@ -362,7 +359,7 @@ function TopologyHeaderNode({ data }) {
   );
 }
 
-const nodeTypes = { topology: TopologyNode, topologyNested: TopologyNode, topologyGroup: TopologyGroupNode, topologyHeader: TopologyHeaderNode };
+const nodeTypes = { topologyNested: TopologyNode, topologyGroup: TopologyGroupNode, topologyHeader: TopologyHeaderNode };
 
 /**
  * Envuelve <ReactFlow> + sus paneles. Vive DENTRO de <ReactFlowProvider>
@@ -563,64 +560,54 @@ export function TopologyMapView({ graph, providers, providersError, vaultNodeIds
   }
 
   const flowNodes = useMemo(() => {
-    const rowByColumn = new Map();
-    const appNodes = graph.nodes.filter((n) => n.col === COL_APP);
     const dcCount = graph.nodes.filter((n) => n.col === COL_DC).length;
 
-    // Árbol de contención del lado derecho (Datacenter ⊃ Servidor ⊃ {BD, App},
-    // SOLO conexiones directas — ver buildContainment) — se mide ANTES de armar
-    // los encabezados porque el de la derecha necesita saber cuánto ocupa.
+    // Árbol de contención (Datacenter ⊃ Servidor ⊃ {BD, App}, SOLO conexiones
+    // directas — ver buildContainment) — se mide ANTES de armar el encabezado
+    // porque necesita saber cuánto ocupa. Sin lista de Aplicación aparte: una
+    // Aplicación solo aparece acá si tiene una conexión directa a un Servidor
+    // (o, para una Base de Datos, también directo a un Datacenter).
     const tree = buildContainment(graph.nodes, graph.edges);
     tree.forEach(measure);
-    const rightWidth = tree.length ? Math.max(...tree.map((t) => t._w)) : NODE_WIDTH;
+    // Ancho total con todos los Datacenter uno al lado del otro (no el máximo
+    // de uno solo) — el encabezado tiene que cubrir la fila completa.
+    const rightWidth = tree.length ? tree.reduce((sum, t) => sum + t._w, 0) + DC_GAP * (tree.length - 1) : NODE_WIDTH;
 
     const headers = [
-      { ci: COL_APP, x: 0, width: NODE_WIDTH },
-      { ci: COL_DC, x: RIGHT_COL_X, width: Math.max(NODE_WIDTH, rightWidth) },
-    ].map(({ ci, x, width }) => ({
-      id: `${HEADER_ID_PREFIX}${ci}`,
-      type: 'topologyHeader',
-      position: { x, y: -56 },
-      data: { label: COLUMNS[ci].title, color: COLUMNS[ci].color, count: ci === COL_DC ? dcCount : appNodes.length },
-      draggable: false,
-      selectable: false,
-      connectable: false,
-      style: { width },
-      zIndex: 1,
-    }));
+      {
+        id: `${HEADER_ID_PREFIX}${COL_DC}`,
+        type: 'topologyHeader',
+        position: { x: 0, y: -56 },
+        data: { label: COLUMNS[COL_DC].title, color: COLUMNS[COL_DC].color, count: dcCount },
+        draggable: false,
+        selectable: false,
+        connectable: false,
+        style: { width: Math.max(NODE_WIDTH, rightWidth) },
+        zIndex: 1,
+      },
+    ];
 
-    // Toda caja con un refId de Aplicación o Base de Datos (lista plana +
-    // cada instancia anidada) — para poder dibujar la línea "usa" entre
-    // dondequiera que haya quedado cada una, sea o no el mismo contenedor
-    // (ver comentario de buildContainment: "usa" nunca anida).
+    // Toda caja con un refId de Aplicación o Base de Datos (cada instancia
+    // anidada) — para poder dibujar la línea "usa" entre dondequiera que haya
+    // quedado cada una, sea o no el mismo contenedor (ver comentario de
+    // buildContainment: "usa" nunca anida). Sin lista de Aplicación aparte,
+    // una Aplicación sin conexión directa a un Servidor no tiene ninguna
+    // instancia — no aparece en el mapa ni puede tener una línea "usa".
     const instancesByRefId = new Map();
     const addInstance = (refId, instanceId) => {
       if (!instancesByRefId.has(refId)) instancesByRefId.set(refId, []);
       instancesByRefId.get(refId).push(instanceId);
     };
 
-    const appBoxes = appNodes.map((n) => {
-      const row = rowByColumn.get(n.col) ?? 0;
-      rowByColumn.set(n.col, row + 1);
-      addInstance(n.id, n.id);
-      return {
-        id: n.id,
-        type: 'topology',
-        position: { x: 0, y: row * ROW_GAP_Y },
-        data: { label: n.name, sub: n.sub, color: n.color || COLUMNS[n.col].color, compact: false, ...interactiveProps(n.id, 'app') },
-        draggable: false,
-        style: { width: NODE_WIDTH },
-      };
-    });
-
+    // Los Datacenter van uno al lado del otro (horizontal), no apilados.
     const nestedBoxes = [];
-    let y = 0;
+    let x = 0;
     for (const dc of tree) {
-      dc._x = RIGHT_COL_X;
-      dc._y = y;
+      dc._x = x;
+      dc._y = 0;
       place(dc);
       flattenTree(dc, undefined, (n) => interactiveProps(n.refId, n.kind), nestedBoxes);
-      y += dc._h + DC_GAP;
+      x += dc._w + DC_GAP;
     }
     // Las cajas anidadas (db/app) son más chicas — se marcan acá, después de
     // flattenTree, para no repetir la lógica de interactiveProps por tipo.
@@ -661,7 +648,7 @@ export function TopologyMapView({ graph, providers, providersError, vaultNodeIds
       }
     }
 
-    return { headers, appBoxes, nestedBoxes, usaEdges, rightWidth };
+    return { headers, nestedBoxes, usaEdges, rightWidth };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [graph.nodes, graph.edges, selectedNodeId, isRelated, canEdit, vaultNodeIds, nodeById]);
 
@@ -703,7 +690,7 @@ export function TopologyMapView({ graph, providers, providersError, vaultNodeIds
       <div className="h-[70vh] min-h-[480px] rounded-md border bg-card">
         <ReactFlowProvider>
           <TopologyCanvas
-            flowNodes={[...flowNodes.headers, ...flowNodes.appBoxes, ...flowNodes.nestedBoxes]}
+            flowNodes={[...flowNodes.headers, ...flowNodes.nestedBoxes]}
             flowEdges={flowEdges}
             graphNodes={graph.nodes}
             selectedNode={selectedNode}

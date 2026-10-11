@@ -25,6 +25,12 @@ export const updateNodeSchema = Joi.object({
   ipAddress: Joi.string().ip().allow('', null),
 }).min(1);
 
+export const importNodesSchema = Joi.object({
+  // ~1MB de texto, igual al límite de express.json() (app.js) — un CSV de
+  // cajas nunca debería acercarse a eso.
+  csv: Joi.string().min(1).max(1_000_000).required(),
+});
+
 export const createEdgeSchema = Joi.object({
   fromNodeId: Joi.string().uuid().required(),
   toNodeId: Joi.string().uuid().required(),
