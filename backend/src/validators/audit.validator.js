@@ -1,9 +1,9 @@
 import Joi from 'joi';
 import { AUDIT_MODULES } from '../audit/auditModules.js';
+import { paginationSchema } from './pagination.js';
 
 export const listAuditLogsQuerySchema = Joi.object({
-  page: Joi.number().integer().min(1).default(1),
-  pageSize: Joi.number().integer().min(1).max(100).default(20),
+  ...paginationSchema,
   userId: Joi.string().uuid().optional(),
   // Módulo cuyos eventos se listan; por defecto 'application' (todo lo
   // que no pertenece a una integración — ver audit.repository.js).

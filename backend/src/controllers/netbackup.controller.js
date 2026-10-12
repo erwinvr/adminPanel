@@ -1,4 +1,6 @@
 import { netbackupService } from '../services/netbackup.service.js';
+import { runTracked } from '../jobs/syncRunner.js';
+import { ConflictError } from '../errors/AppError.js';
 
 export async function listDevices(req, res) {
   const devices = await netbackupService.listDevices();
@@ -25,8 +27,15 @@ export async function deleteDevice(req, res) {
   res.status(204).send();
 }
 
+// Misma clave por dispositivo (`netbackup:<id>`) que usa el scheduler
+// (jobs/syncScheduler.js#checkAndRunNetbackupDevices) — con `runTracked`
+// esta descarga manual queda registrada ahí, así que un backup automático
+// de ESTE dispositivo no arranca una segunda sesión SSH mientras la manual
+// sigue en curso (antes el controller llamaba al servicio directo, sin
+// pasar por ningún seguimiento compartido).
 export async function runBackup(req, res) {
-  const result = await netbackupService.runBackup(req, req.params.id);
+  const result = await runTracked(`netbackup:${req.params.id}`, () => netbackupService.runBackup(req, req.params.id));
+  if (result === null) throw new ConflictError('Ya hay una descarga en curso para este dispositivo.');
   res.status(200).json({ success: true, data: result });
 }
 

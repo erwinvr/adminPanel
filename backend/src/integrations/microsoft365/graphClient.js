@@ -56,6 +56,9 @@ export async function getAccessToken({ tenantId, clientId, clientSecret }) {
     const detail = payload?.error_description?.split('\r\n')[0] ?? payload?.error ?? `HTTP ${response.status}`;
     throw new GraphApiError('No se pudo autenticar contra Microsoft 365 — revisá tenant, client ID y client secret. ' + detail);
   }
+  if (!payload?.access_token) {
+    throw new GraphApiError('Microsoft respondió con un cuerpo inesperado (sin access_token) al autenticar.');
+  }
   return payload.access_token;
 }
 
@@ -70,6 +73,7 @@ async function graphGetAll(accessToken, path) {
       const detail = payload?.error?.message ?? `HTTP ${response.status}`;
       throw new GraphApiError('Microsoft Graph respondió con un error: ' + detail);
     }
+    if (!payload) throw new GraphApiError('Microsoft Graph respondió con un cuerpo vacío o inválido.');
     results.push(...(payload.value ?? []));
     url = payload['@odata.nextLink'] ?? null;
   }
@@ -157,6 +161,7 @@ async function postAuthMethodsBatch(accessToken, userIds) {
   if (!response.ok) {
     throw new GraphApiError('Microsoft Graph respondió con un error: ' + (payload?.error?.message ?? `HTTP ${response.status}`));
   }
+  if (!payload) throw new GraphApiError('Microsoft Graph respondió con un cuerpo vacío o inválido en el $batch.');
   const byRequestId = new Map((payload.responses ?? []).map((r) => [r.id, r]));
   return userIds.map((userId, i) => ({ userId, ...(byRequestId.get(String(i)) ?? { status: 0 }) }));
 }
@@ -437,6 +442,7 @@ export async function fetchTeamsActivity(accessToken) {
     const response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
     const payload = await response.json().catch(() => null);
     if (!response.ok) throw new GraphApiError('Microsoft Graph respondió con un error: ' + (payload?.error?.message ?? `HTTP ${response.status}`));
+    if (!payload) throw new GraphApiError('Microsoft Graph respondió con un cuerpo vacío o inválido.');
     teams.push(...(payload.value ?? []));
     url = payload['@odata.nextLink'] ?? null;
   }

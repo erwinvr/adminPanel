@@ -28,6 +28,14 @@ function hashToken(token) {
   return createHash('sha256').update(token).digest('hex');
 }
 
+// Hash argon2 "señuelo" (de una contraseña que no es la de nadie) — se
+// corre en cada rama de login fallido que NO verifica contraseña real, para
+// que el tiempo de respuesta no delate "existe pero bloqueada/inactiva" vs
+// "no existe" (antes solo se corría para "no existe", dejando un canal de
+// tiempo abierto en las otras dos ramas aunque el texto del error fuera
+// igual).
+const DECOY_HASH = '$argon2id$v=19$m=19456,t=2,p=1$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+
 export const authService = {
   /**
    * @param {import('express').Request} req
@@ -37,20 +45,23 @@ export const authService = {
     const user = await userRepository.findByUsernameOrEmailWithSecrets(identifier.toLowerCase());
 
     if (!user) {
-      // Se ejecuta un hash "señuelo" para que el tiempo de respuesta no
-      // delate si el usuario existe o no (mitigación adicional de timing
-      // attack para user enumeration).
-      await verifyPassword(password, '$argon2id$v=19$m=19456,t=2,p=1$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA');
+      await verifyPassword(password, DECOY_HASH);
       await recordEvent({ action: 'auth.login', resource: 'session', result: 'failure', req, metadata: { reason: 'user_not_found', identifier } });
       throw new AuthenticationError(GENERIC_LOGIN_ERROR);
     }
 
     if (user.status === 'locked' && user.locked_until && new Date(user.locked_until) > new Date()) {
+      await verifyPassword(password, DECOY_HASH);
       await recordEvent({ userId: user.id, action: 'auth.login', resource: 'session', result: 'failure', req, metadata: { reason: 'account_locked' } });
-      throw new AuthenticationError('Cuenta bloqueada temporalmente por múltiples intentos fallidos');
+      // Mismo mensaje genérico que el resto — un mensaje distinto acá
+      // delataría que la cuenta existe y está bloqueada, justo lo que esta
+      // mitigación de enumeración busca evitar en todas las demás ramas.
+      // El motivo real queda en el log de auditoría de arriba.
+      throw new AuthenticationError(GENERIC_LOGIN_ERROR);
     }
 
     if (user.status !== 'active' && !(user.status === 'locked' && new Date(user.locked_until) <= new Date())) {
+      await verifyPassword(password, DECOY_HASH);
       await recordEvent({ userId: user.id, action: 'auth.login', resource: 'session', result: 'failure', req, metadata: { reason: 'inactive_account' } });
       throw new AuthenticationError(GENERIC_LOGIN_ERROR);
     }
@@ -60,7 +71,7 @@ export const authService = {
       const newFailedCount = user.failed_login_count + 1;
       if (newFailedCount >= env.accountLock.maxFailedAttempts) {
         const until = new Date(Date.now() + env.accountLock.durationMs);
-        await userRepository.lockUntil(user.id, until);
+        await userRepository.lockUntil(user.id, until, newFailedCount);
         await recordEvent({ userId: user.id, action: 'auth.account_locked', resource: 'user', resourceId: user.id, result: 'success', req, metadata: { failedAttempts: newFailedCount } });
       } else {
         await userRepository.incrementFailedLogin(user.id);

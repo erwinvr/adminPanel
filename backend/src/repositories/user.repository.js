@@ -8,6 +8,7 @@
  */
 
 import { db } from '../config/database.js';
+import { paginate, buildPaginationMeta } from './pagination.js';
 
 const TABLE = 'users';
 
@@ -94,24 +95,14 @@ export const userRepository = {
     }
 
     const countQuery = baseQuery.clone().count({ count: '*' }).first();
-    const rowsQuery = baseQuery
-      .clone()
-      .select(PUBLIC_COLUMNS)
-      .orderBy(sortColumn, sortDir === 'asc' ? 'asc' : 'desc')
-      .limit(pageSize)
-      .offset((page - 1) * pageSize);
+    const rowsQuery = paginate(
+      baseQuery.clone().select(PUBLIC_COLUMNS).orderBy(sortColumn, sortDir === 'asc' ? 'asc' : 'desc'),
+      { page, pageSize }
+    );
 
     const [{ count }, rows] = await Promise.all([countQuery, rowsQuery]);
 
-    return {
-      items: rows,
-      pagination: {
-        page,
-        pageSize,
-        total: Number(count),
-        totalPages: Math.max(1, Math.ceil(Number(count) / pageSize)),
-      },
-    };
+    return { items: rows, pagination: buildPaginationMeta({ page, pageSize, count }) };
   },
 
   incrementFailedLogin(id, trx = db) {
@@ -122,8 +113,11 @@ export const userRepository = {
     return trx(TABLE).where({ id }).update({ failed_login_count: 0, locked_until: null });
   },
 
-  lockUntil(id, until, trx = db) {
-    return trx(TABLE).where({ id }).update({ status: 'locked', locked_until: until });
+  // `failedCount` queda grabado junto con el bloqueo (antes no se guardaba
+  // acá — quedaba un intento atrás del umbral, así que al expirar el
+  // bloqueo un solo error más volvía a bloquear la cuenta en el acto).
+  lockUntil(id, until, failedCount, trx = db) {
+    return trx(TABLE).where({ id }).update({ status: 'locked', locked_until: until, failed_login_count: failedCount });
   },
 
   unlock(id, trx = db) {

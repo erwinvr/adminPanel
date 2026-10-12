@@ -369,6 +369,81 @@ esas, ver `git log`.
   UPDATE/DELETE), así que los eventos ya guardados no se borraron —
   se excluyeron de la consulta que alimenta esta página.
 
+### Seguridad
+
+- **Login: dos canales que permitían distinguir "usuario no existe" de
+  "existe pero está bloqueado/inactivo"**. El hash "señuelo" (que
+  absorbe el tiempo de verificar una contraseña real) antes solo se
+  corría en la rama "usuario no existe"; ahora se corre también
+  cuando la cuenta está bloqueada o inactiva, así el tiempo de
+  respuesta no delata cuál de los tres casos es. Además, "cuenta
+  bloqueada" devolvía un mensaje distinto al resto
+  ("bloqueada temporalmente por múltiples intentos fallidos"); ahora
+  usa el mismo mensaje genérico que cualquier credencial inválida — el
+  motivo real sigue quedando en el evento de auditoría. Por separado,
+  el contador de intentos fallidos que dispara el bloqueo no se estaba
+  persistiendo al bloquear la cuenta (`lockUntil` no lo guardaba),
+  así que se perdía apenas la cuenta quedaba bloqueada.
+
+### Corregido
+
+- **Sincronización manual y automática de una misma integración podían
+  pisarse** (AD, Veeam, PAM360, UEM/Vulnerabilidades, y cada
+  dispositivo de Backup Networking): el botón "Sincronizar ahora" de
+  cada pantalla de Configuración llamaba al servicio directo, sin
+  pasar por el seguimiento que ya usa el scheduler automático
+  (`jobs/syncRunner.js`) — dos sesiones (ej. una conexión SSH a un
+  mismo dispositivo) podían correr en paralelo. Ahora los 5 controllers
+  usan el mismo seguimiento que el scheduler y la corrida manual
+  responde 409 si ya hay una en curso.
+- **Backup Networking: una falla al evaluar las reglas de compliance
+  después de un backup exitoso podía dejar la corrida marcada como
+  fallida pese a haber funcionado**. La evaluación de compliance
+  corría dentro del mismo `Promise.all` que grababa el resultado del
+  backup; si tiraba una excepción (ej. una regla con una expresión
+  regular inválida), el `catch` de más arriba volvía a escribir
+  `result: 'failure'` sobre la misma corrida que un instante antes se
+  había marcado `'success'` — una carrera con resultado final no
+  determinístico y dos eventos de auditoría contradictorios para la
+  misma corrida. Ahora la evaluación de compliance corre después, y si
+  falla solo queda en el log del proceso; el resultado del backup ya
+  quedó grabado.
+- **Doble fila al guardar la configuración de una integración por
+  primera vez** (AD, M365, Veeam, PAM360, UEM, SMTP): guardar eran un
+  "leer, después insertar o actualizar"; dos guardados casi
+  simultáneos (doble clic, reintento del frontend) podían ver los dos
+  "no existe todavía" y terminar insertando dos filas en una tabla
+  pensada para tener una sola. Ahora el guardado toma un lock de
+  Postgres por tabla mientras dura, sin necesitar una migración nueva.
+  Probado con 10 guardados concurrentes contra una tabla de prueba:
+  antes de la corrección insertaba varias filas, con la corrección
+  queda siempre una.
+- **Microsoft Graph o Veeam respondiendo sin cuerpo JSON (o con uno
+  vacío) podía tumbar la sincronización con un error no controlado**
+  (`TypeError: Cannot read properties of null`) en vez de un error
+  claro de la integración. Pasa en cortes de red a mitad de respuesta
+  o mantenimientos del lado del proveedor; ahora esos casos tiran un
+  error propio de la integración con un mensaje entendible.
+
+### Cambiado
+
+- **Refactor de código compartido, sin cambios de comportamiento**:
+  `createSettingsController` reemplaza el `getSettings`/`saveSettings`
+  copiado en los 6 controllers de integraciones (AD, M365, Veeam,
+  PAM360, UEM, SMTP); un helper de paginación (`repositories/pagination.js`)
+  y un fragmento de validación (`validators/pagination.js`) reemplazan
+  el `LIMIT/OFFSET` y el esquema `page`/`pageSize` duplicados en los 4
+  listados paginados del lado del servidor (usuarios, auditoría,
+  usuarios de M365, solicitudes de acceso de PAM360) — de paso, el
+  `pageSize` por defecto de usuarios de M365 pasa de 10 a 20 para que
+  los 4 queden iguales.
+- **Inventario de hardware (crear/editar) ya no vuelve a traer toda la
+  tabla para devolver la fila recién creada/editada** — usaba
+  `listItems()` completo y buscaba el id en memoria; ahora una
+  consulta trae solo esa fila. Al crear un ítem, la validación de
+  oficina y de proveedor de soporte corre en paralelo en vez de una
+  después de la otra.
+
 ## [1.4] - 2026-09-06
 
 ### Agregado

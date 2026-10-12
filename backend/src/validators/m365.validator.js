@@ -1,8 +1,8 @@
 import Joi from 'joi';
+import { paginationSchema } from './pagination.js';
 
 export const listUsersQuerySchema = Joi.object({
-  page: Joi.number().integer().min(1).default(1),
-  pageSize: Joi.number().integer().min(1).max(100).default(10),
+  ...paginationSchema,
   search: Joi.string().trim().max(200).allow('').optional(),
   // Filtro por estado de MFA: con método registrado / sin MFA / sin dato.
   mfa: Joi.string().valid('registered', 'missing', 'unknown').optional(),

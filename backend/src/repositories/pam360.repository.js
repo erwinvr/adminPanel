@@ -1,6 +1,7 @@
 import { db } from '../config/database.js';
 import { createSettingsRepository } from './settings.js';
 import { chunkedInsert } from './bulk.js';
+import { paginate, buildPaginationMeta } from './pagination.js';
 
 export const pam360Repository = {
   ...createSettingsRepository('pam360_settings'),
@@ -44,22 +45,10 @@ export const pam360Repository = {
     if (to) query.andWhere('requested_at', '<=', to);
 
     const countQuery = query.clone().clearSelect().clearOrder().count({ count: 'id' }).first();
-    const rowsQuery = query
-      .clone()
-      .orderBy('requested_at', 'desc')
-      .limit(pageSize)
-      .offset((page - 1) * pageSize);
+    const rowsQuery = paginate(query.clone().orderBy('requested_at', 'desc'), { page, pageSize });
 
     const [{ count }, rows] = await Promise.all([countQuery, rowsQuery]);
 
-    return {
-      items: rows,
-      pagination: {
-        page,
-        pageSize,
-        total: Number(count),
-        totalPages: Math.max(1, Math.ceil(Number(count) / pageSize)),
-      },
-    };
+    return { items: rows, pagination: buildPaginationMeta({ page, pageSize, count }) };
   },
 };

@@ -1,5 +1,6 @@
 import { db } from '../config/database.js';
 import { AUDIT_MODULES, INTEGRATION_PREFIXES, EXCLUDED_EVERYWHERE } from '../audit/auditModules.js';
+import { paginate, buildPaginationMeta } from './pagination.js';
 
 export const auditRepository = {
   /**
@@ -53,22 +54,10 @@ export const auditRepository = {
     if (to) query.andWhere('a.occurred_at', '<=', to);
 
     const countQuery = query.clone().clearSelect().clearOrder().count({ count: 'a.id' }).first();
-    const rowsQuery = query
-      .clone()
-      .orderBy('a.occurred_at', 'desc')
-      .limit(pageSize)
-      .offset((page - 1) * pageSize);
+    const rowsQuery = paginate(query.clone().orderBy('a.occurred_at', 'desc'), { page, pageSize });
 
     const [{ count }, rows] = await Promise.all([countQuery, rowsQuery]);
 
-    return {
-      items: rows,
-      pagination: {
-        page,
-        pageSize,
-        total: Number(count),
-        totalPages: Math.max(1, Math.ceil(Number(count) / pageSize)),
-      },
-    };
+    return { items: rows, pagination: buildPaginationMeta({ page, pageSize, count }) };
   },
 };

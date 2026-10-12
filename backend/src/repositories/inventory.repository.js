@@ -27,4 +27,16 @@ export const inventoryRepository = {
   findItemById(id) {
     return db('hardware_inventory').where({ id }).first();
   },
+
+  // Misma vista (joins y columnas) que `listItems`, pero para un solo
+  // ítem — evita traer toda la tabla para devolver una fila tras un
+  // create/update.
+  findItemView(id) {
+    return db('hardware_inventory as h')
+      .join('offices as o', 'o.id', 'h.office_id')
+      .leftJoin('providers as p', 'p.id', 'h.support_provider_id')
+      .select(INVENTORY_COLUMNS)
+      .where('h.id', id)
+      .first();
+  },
 };

@@ -36,6 +36,7 @@ import { RAW_SSH_DRIVER, driverRequiresCommand } from '../integrations/networkBa
 import { complianceService } from './compliance.service.js';
 import { recordEvent } from '../audit/audit.service.js';
 import { NotFoundError, ValidationError, ConflictError } from '../errors/AppError.js';
+import { logger } from '../config/logger.js';
 
 function hashConfig(output) {
   return crypto.createHash('sha256').update(output).digest('hex');
@@ -186,9 +187,15 @@ export const netbackupService = {
               password,
             });
 
-      // Las 4 operaciones de acá abajo son independientes entre sí (ninguna
-      // lee lo que escribió otra) — corren en paralelo en vez de una
-      // detrás de otra.
+      // Estas 3 son independientes entre sí y las 3 corresponden al
+      // RESULTADO del backup en sí (ninguna depende de compliance) — corren
+      // en paralelo. evaluateDevice queda APARTE y después: antes estaba acá
+      // adentro del mismo Promise.all, y si tiraba una excepción (ej. una
+      // regla de compliance con regex inválida) el catch de abajo volvía a
+      // escribir finishRun con result:'failure' sobre la MISMA fila que acá
+      // ya se había marcado 'success' — una carrera que dejaba el resultado
+      // final no determinístico y dos eventos de auditoría contradictorios
+      // para la misma corrida, aunque el backup hubiera salido bien.
       await Promise.all([
         netbackupRepository.finishRun(runId, {
           result: 'success',
@@ -201,7 +208,6 @@ export const netbackupService = {
           configHash: hashConfig(normalizeForHash(device.driver, output)),
         }),
         netbackupRepository.updateDevice(deviceId, { last_run_at: new Date() }),
-        complianceService.evaluateDevice(req, device, output, runId),
         recordEvent({
           userId: actorId,
           action: 'netbackup.run',
@@ -212,6 +218,15 @@ export const netbackupService = {
           metadata: { device: deviceLabel(device), trigger, configLength: output.length },
         }),
       ]);
+
+      // Si esto falla, el backup en sí ya quedó grabado como exitoso arriba
+      // — no corresponde volver a marcar la corrida como 'failure' por un
+      // problema de compliance, solo se deja constancia en el log del proceso.
+      try {
+        await complianceService.evaluateDevice(req, device, output, runId);
+      } catch (complianceErr) {
+        logger.error({ err: complianceErr }, `[netbackup] Falló la evaluación de compliance del dispositivo ${deviceId} (corrida ${runId}) — el backup en sí salió bien`);
+      }
 
       return { runId, configLength: output.length };
     } catch (err) {

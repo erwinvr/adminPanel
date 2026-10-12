@@ -13,14 +13,24 @@ export function createSettingsRepository(table) {
       return db(table).first();
     },
 
+    // "Check-then-act" (lee, después inserta o actualiza) — sin el lock de
+    // abajo, dos guardados casi simultáneos la primera vez que se configura
+    // una integración (doble clic, reintento del frontend) pueden ver los
+    // dos `existing = undefined` y terminar insertando dos filas en una
+    // tabla pensada para tener una sola. `pg_advisory_xact_lock` serializa
+    // los upserts de ESTA tabla (se libera solo al cerrar la transacción);
+    // no hace falta una migración ni una columna UNIQUE nueva.
     async upsertSettings(changes) {
-      const existing = await db(table).first();
-      if (existing) {
-        const [row] = await db(table).where({ id: existing.id }).update(changes).returning('*');
+      return db.transaction(async (trx) => {
+        await trx.raw('select pg_advisory_xact_lock(hashtext(?))', [table]);
+        const existing = await trx(table).first();
+        if (existing) {
+          const [row] = await trx(table).where({ id: existing.id }).update(changes).returning('*');
+          return row;
+        }
+        const [row] = await trx(table).insert(changes).returning('*');
         return row;
-      }
-      const [row] = await db(table).insert(changes).returning('*');
-      return row;
+      });
     },
   };
 }

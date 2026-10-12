@@ -1,6 +1,7 @@
 import { db } from '../config/database.js';
 import { createSettingsRepository } from './settings.js';
 import { chunkedInsert, replaceTableContents } from './bulk.js';
+import { paginate, buildPaginationMeta } from './pagination.js';
 
 export const m365Repository = {
   ...createSettingsRepository('m365_settings'),
@@ -242,22 +243,23 @@ export const m365Repository = {
     }
 
     const countQuery = query.clone().count({ count: 'u.id' }).first();
-    const rowsQuery = query
-      .clone()
-      .select(
-        'u.id',
-        'u.aad_object_id as aadObjectId',
-        'u.display_name as displayName',
-        'u.user_principal_name as userPrincipalName',
-        'u.account_enabled as accountEnabled',
-        'u.is_mfa_registered as isMfaRegistered',
-        'u.is_mfa_capable as isMfaCapable',
-        'u.methods_registered as methodsRegistered',
-        'u.synced_at as syncedAt'
-      )
-      .orderBy([{ column: 'u.display_name' }, { column: 'u.id' }])
-      .limit(pageSize)
-      .offset((page - 1) * pageSize);
+    const rowsQuery = paginate(
+      query
+        .clone()
+        .select(
+          'u.id',
+          'u.aad_object_id as aadObjectId',
+          'u.display_name as displayName',
+          'u.user_principal_name as userPrincipalName',
+          'u.account_enabled as accountEnabled',
+          'u.is_mfa_registered as isMfaRegistered',
+          'u.is_mfa_capable as isMfaCapable',
+          'u.methods_registered as methodsRegistered',
+          'u.synced_at as syncedAt'
+        )
+        .orderBy([{ column: 'u.display_name' }, { column: 'u.id' }]),
+      { page, pageSize }
+    );
 
     const [{ count }, users] = await Promise.all([countQuery, rowsQuery]);
 
@@ -276,12 +278,7 @@ export const m365Repository = {
 
     return {
       items: users.map((u) => ({ ...u, licenses: skusByUserId.get(u.id) ?? [] })),
-      pagination: {
-        page,
-        pageSize,
-        total: Number(count),
-        totalPages: Math.max(1, Math.ceil(Number(count) / pageSize)),
-      },
+      pagination: buildPaginationMeta({ page, pageSize, count }),
     };
   },
 

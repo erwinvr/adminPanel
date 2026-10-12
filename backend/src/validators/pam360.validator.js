@@ -1,4 +1,5 @@
 import Joi from 'joi';
+import { paginationSchema } from './pagination.js';
 
 export const saveSettingsSchema = Joi.object({
   baseUrl: Joi.string().trim().uri().max(255).required(),
@@ -27,8 +28,7 @@ export const saveSettingsSchema = Joi.object({
 });
 
 export const listAccessRequestsQuerySchema = Joi.object({
-  page: Joi.number().integer().min(1).default(1),
-  pageSize: Joi.number().integer().min(1).max(100).default(20),
+  ...paginationSchema,
   search: Joi.string().max(300).optional(),
   from: Joi.date().iso().optional(),
   to: Joi.date().iso().optional(),

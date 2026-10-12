@@ -80,6 +80,9 @@ export async function getAccessToken({ baseUrl, username, password, verifyTls = 
     const detail = payload?.error_description ?? payload?.message ?? `HTTP ${response.status}`;
     throw new VeeamApiError('No se pudo autenticar contra Veeam — revisá usuario y contraseña. ' + detail);
   }
+  if (!payload?.access_token) {
+    throw new VeeamApiError('Veeam respondió con un cuerpo inesperado (sin access_token) al autenticar.');
+  }
   return payload.access_token;
 }
 

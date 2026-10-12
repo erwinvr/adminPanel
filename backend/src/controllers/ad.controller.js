@@ -1,17 +1,17 @@
 import { adService } from '../services/ad.service.js';
+import { runTracked } from '../jobs/syncRunner.js';
+import { ConflictError } from '../errors/AppError.js';
+import { createSettingsController } from './settingsControllerFactory.js';
 
-export async function getSettings(req, res) {
-  const settings = await adService.getSettings();
-  res.status(200).json({ success: true, data: settings });
-}
+export const { getSettings, saveSettings } = createSettingsController(adService);
 
-export async function saveSettings(req, res) {
-  const settings = await adService.saveSettings(req, req.body);
-  res.status(200).json({ success: true, data: settings });
-}
-
+// `runTracked` (jobs/syncRunner.js) hace que esta corrida manual quede
+// registrada igual que una automática — el scheduler (syncScheduler.js)
+// la ve y no dispara una segunda sincronización de AD por encima mientras
+// esta sigue en curso.
 export async function sync(req, res) {
-  const result = await adService.sync(req);
+  const result = await runTracked('ad', () => adService.sync(req));
+  if (result === null) throw new ConflictError('Ya hay una sincronización de Active Directory en curso.');
   res.status(200).json({ success: true, data: result });
 }
 

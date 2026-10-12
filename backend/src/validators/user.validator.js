@@ -1,4 +1,5 @@
 import Joi from 'joi';
+import { paginationSchema } from './pagination.js';
 
 const usernamePattern = /^[a-zA-Z0-9._-]{3,50}$/;
 
@@ -22,8 +23,7 @@ export const updateUserSchema = Joi.object({
 }).min(1);
 
 export const listUsersQuerySchema = Joi.object({
-  page: Joi.number().integer().min(1).default(1),
-  pageSize: Joi.number().integer().min(1).max(100).default(20),
+  ...paginationSchema,
   search: Joi.string().trim().max(255).allow('').optional(),
   status: Joi.string().valid('active', 'inactive', 'locked').optional(),
   sortBy: Joi.string().valid('created_at', 'username', 'email', 'last_name', 'status').optional(),

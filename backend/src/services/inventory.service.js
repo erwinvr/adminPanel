@@ -33,8 +33,7 @@ export const inventoryService = {
     req,
     { type, brand, model, officeId, hasSupport, supportUntil, supportProviderId, managementIp, includeInTopology }
   ) {
-    await assertOfficeExists(officeId);
-    await assertProviderExists(supportProviderId);
+    await Promise.all([assertOfficeExists(officeId), assertProviderExists(supportProviderId)]);
     const actorId = req.session.userId;
 
     const created = await db.transaction(async (trx) => {
@@ -68,15 +67,16 @@ export const inventoryService = {
       return row;
     });
 
-    const all = await inventoryRepository.listItems();
-    return all.find((item) => item.id === created.id);
+    return inventoryRepository.findItemView(created.id);
   },
 
   async updateItem(req, id, changes) {
     const existing = await inventoryRepository.findItemById(id);
     if (!existing) throw new NotFoundError('Ítem de inventario no encontrado');
-    if (changes.officeId !== undefined) await assertOfficeExists(changes.officeId);
-    if (changes.supportProviderId !== undefined) await assertProviderExists(changes.supportProviderId);
+    await Promise.all([
+      changes.officeId !== undefined ? assertOfficeExists(changes.officeId) : null,
+      changes.supportProviderId !== undefined ? assertProviderExists(changes.supportProviderId) : null,
+    ]);
 
     const actorId = req.session.userId;
     const nextHasSupport = changes.hasSupport !== undefined ? changes.hasSupport : existing.has_support;
@@ -116,8 +116,7 @@ export const inventoryService = {
       });
     });
 
-    const all = await inventoryRepository.listItems();
-    return all.find((item) => item.id === id);
+    return inventoryRepository.findItemView(id);
   },
 
   async deleteItem(req, id) {
