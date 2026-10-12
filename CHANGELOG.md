@@ -37,6 +37,21 @@ esas, ver `git log`.
   valida formato de IP), editable desde "Administrar cajas" y visible en
   el mapa y en el panel de información — solo para esa categoría.
 
+### Corregido
+
+- **Mapa de Aplicaciones: la línea "usa" entre una Aplicación y su Base
+  de Datos se desviaba hacia afuera antes de conectar**, en vez de ir
+  directo entre las dos cajas, cuando quedaban casi a la misma altura en
+  Datacenter/Nube distintos (ej. una Aplicación en un Datacenter
+  ubicado a la izquierda del de su Base de Datos). Cada caja tenía un
+  único punto de conexión fijo (siempre sale por la derecha, siempre
+  entra por la izquierda) sin importar dónde terminó ubicada la otra
+  punta — y los Datacenter se ordenan según los datos, no según qué
+  conexiones "usa" hay entre lo que contienen, así que ese desvío era
+  inevitable con datos reales. Ahora cada línea calcula, para las dos
+  cajas que une, por qué lado de cada una entrar/salir según su
+  posición real en el lienzo.
+
 ### Agregado
 
 - **"Administrar cajas" (Aplicaciones) → buscador por nombre**, y **alta

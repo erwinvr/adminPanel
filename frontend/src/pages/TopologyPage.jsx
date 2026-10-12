@@ -45,12 +45,15 @@ import {
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
+  useInternalNode,
   Background,
   Controls,
   MiniMap,
   Handle,
   Position,
   MarkerType,
+  BaseEdge,
+  getSmoothStepPath,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { X, Info, ArrowLeftRight, Lock, Share2 } from 'lucide-react';
@@ -359,6 +362,81 @@ function TopologyHeaderNode({ data }) {
   );
 }
 
+// Punto donde el segmento centro-a-centro entre dos cajas cruza el borde de
+// `intersectionNode` — fórmula estándar de "floating edges" de React Flow
+// (intersección de una línea con un rectángulo centrado en origen).
+function getNodeIntersection(intersectionNode, targetNode) {
+  const { width, height } = intersectionNode.measured;
+  const { x: ix, y: iy } = intersectionNode.internals.positionAbsolute;
+  const { x: tx, y: ty } = targetNode.internals.positionAbsolute;
+
+  const w = width / 2;
+  const h = height / 2;
+  const x2 = ix + w;
+  const y2 = iy + h;
+  const x1 = tx + targetNode.measured.width / 2;
+  const y1 = ty + targetNode.measured.height / 2;
+
+  const xx1 = (x1 - x2) / (2 * w) - (y1 - y2) / (2 * h);
+  const yy1 = (x1 - x2) / (2 * w) + (y1 - y2) / (2 * h);
+  const a = 1 / (Math.abs(xx1) + Math.abs(yy1) || 1);
+  const xx3 = a * xx1;
+  const yy3 = a * yy1;
+
+  return { x: w * (xx3 + yy3) + x2, y: h * (-xx3 + yy3) + y2 };
+}
+
+// De qué lado de `node` quedó el punto de intersección, para que
+// getSmoothStepPath sepa en qué dirección salir/entrar.
+function getEdgePosition(node, intersectionPoint) {
+  const { x: nx, y: ny } = node.internals.positionAbsolute;
+  const { width, height } = node.measured;
+  const px = Math.round(intersectionPoint.x);
+  const py = Math.round(intersectionPoint.y);
+
+  if (px <= Math.round(nx) + 1) return Position.Left;
+  if (px >= Math.round(nx + width) - 1) return Position.Right;
+  if (py <= Math.round(ny) + 1) return Position.Top;
+  if (py >= Math.round(ny + height) - 1) return Position.Bottom;
+  return Position.Top;
+}
+
+/**
+ * Edge "flotante": en vez de salir siempre por el lado derecho de la caja
+ * origen y entrar siempre por el izquierdo de la destino (los `<Handle>`
+ * fijos de TopologyNode), calcula de qué lado quedó cada caja relativo a
+ * la otra — necesario porque los Datacenter se ubican uno al lado del otro
+ * según el orden de los datos, no según qué conexiones "usa" existen entre
+ * sus hijos, así que una Aplicación puede terminar a la izquierda (o a la
+ * misma altura) de la Base de Datos que usa. Con el lado fijo, el trazador
+ * ortogonal de `smoothstep` se veía obligado a salir por el lado
+ * "equivocado" y dar la vuelta por fuera de las cajas antes de conectar.
+ */
+function FloatingSmoothStepEdge({ id, source, target, style, markerEnd }) {
+  const sourceNode = useInternalNode(source);
+  const targetNode = useInternalNode(target);
+  if (!sourceNode || !targetNode) return null;
+
+  const sourceIntersection = getNodeIntersection(sourceNode, targetNode);
+  const targetIntersection = getNodeIntersection(targetNode, sourceNode);
+  const sourcePosition = getEdgePosition(sourceNode, sourceIntersection);
+  const targetPosition = getEdgePosition(targetNode, targetIntersection);
+
+  const [path] = getSmoothStepPath({
+    sourceX: sourceIntersection.x,
+    sourceY: sourceIntersection.y,
+    sourcePosition,
+    targetX: targetIntersection.x,
+    targetY: targetIntersection.y,
+    targetPosition,
+    borderRadius: 6,
+  });
+
+  return <BaseEdge id={id} path={path} style={style} markerEnd={markerEnd} />;
+}
+
+const edgeTypes = { floatingSmoothstep: FloatingSmoothStepEdge };
+
 const nodeTypes = { topologyNested: TopologyNode, topologyGroup: TopologyGroupNode, topologyHeader: TopologyHeaderNode };
 
 /**
@@ -400,6 +478,7 @@ function TopologyCanvas({
       nodes={flowNodes}
       edges={flowEdges}
       nodeTypes={nodeTypes}
+      edgeTypes={edgeTypes}
       nodesDraggable={false}
       nodesConnectable={false}
       proOptions={{ hideAttribution: true }}
@@ -662,7 +741,7 @@ export function TopologyMapView({ graph, providers, providersError, vaultNodeIds
           id: e.id,
           source: e.source,
           target: e.target,
-          type: 'smoothstep',
+          type: 'floatingSmoothstep',
           className: !selectedNodeId || related ? 'topology-edge-flow' : undefined,
           style: {
             stroke: related ? 'var(--primary)' : color,
