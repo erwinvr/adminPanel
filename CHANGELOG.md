@@ -8,7 +8,24 @@ esas, ver `git log`.
 
 ## [Unreleased]
 
+### Agregado
+
+- **Reportes → "Usuarios de Microsoft 365 (todos los atributos)"**: nuevo
+  reporte con el listado completo de usuarios de M365 (nombre, UPN,
+  dominio, ID de Azure AD, habilitada, MFA registrado/capaz, métodos de
+  MFA, último chequeo de MFA, licencias y última sincronización) — antes
+  solo existían reportes de subconjuntos filtrados (sin MFA, deshabilitados
+  con licencia).
+
 ### Cambiado
+
+- **Reportes → "Usuarios de Active Directory" pasa a "...(todos los
+  atributos)"**: antes solo exportaba nombre, correo, usuario, fecha de
+  creación y estado; ahora también incluye DN, bloqueo (y su fecha),
+  contraseña sin vencimiento (y fecha del último cambio), último inicio de
+  sesión, grupos privilegiados y última sincronización — y ahora tiene
+  buscador por nombre/correo/usuario. Mismas filas que antes (todos los
+  usuarios de AD, sin filtro), solo con más columnas.
 
 - **Mapa de Aplicaciones: se dibuja por contención, no por 5 columnas
   planas ni por una lista de Aplicación aparte.** Ahora es un solo árbol:
