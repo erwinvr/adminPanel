@@ -10,12 +10,17 @@ esas, ver `git log`.
 
 ### Agregado
 
+- **Sincronización de Microsoft 365 trae `onPremisesDomainName`**: el
+  dominio de Active Directory on-premises del que viene sincronizada cada
+  cuenta vía Entra Connect (null en cuentas nativas de la nube) — columna
+  nueva en `m365_users`, visible en el reporte "Usuarios de Microsoft 365
+  (todos los atributos)". Queda null hasta la próxima sincronización.
 - **Reportes → "Usuarios de Microsoft 365 (todos los atributos)"**: nuevo
   reporte con el listado completo de usuarios de M365 (nombre, UPN,
-  dominio, ID de Azure AD, habilitada, MFA registrado/capaz, métodos de
-  MFA, último chequeo de MFA, licencias y última sincronización) — antes
-  solo existían reportes de subconjuntos filtrados (sin MFA, deshabilitados
-  con licencia).
+  dominio, ID de Azure AD, dominio AD on-premises, habilitada, MFA
+  registrado/capaz, métodos de MFA, último chequeo de MFA, licencias y
+  última sincronización) — antes solo existían reportes de subconjuntos
+  filtrados (sin MFA, deshabilitados con licencia).
 
 ### Cambiado
 

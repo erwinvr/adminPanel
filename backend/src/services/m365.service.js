@@ -239,6 +239,7 @@ export const m365Service = {
         display_name: u.displayName,
         user_principal_name: u.userPrincipalName,
         account_enabled: u.accountEnabled ?? true,
+        on_premises_domain_name: u.onPremisesDomainName ?? null,
         is_mfa_registered: mfa ? mfa.isMfaRegistered : null,
         is_mfa_capable: mfa ? mfa.isMfaCapable : null,
         methods_registered: mfa ? JSON.stringify(mfa.methodsRegistered) : null,

@@ -90,7 +90,7 @@ export function fetchSubscribedSkus(accessToken) {
 export function fetchUsersWithLicenses(accessToken) {
   return graphGetAll(
     accessToken,
-    '/users?$select=id,displayName,userPrincipalName,accountEnabled,assignedLicenses&$top=999'
+    '/users?$select=id,displayName,userPrincipalName,accountEnabled,assignedLicenses,onPremisesDomainName&$top=999'
   );
 }
 
