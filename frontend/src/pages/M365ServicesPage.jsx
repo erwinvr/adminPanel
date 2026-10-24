@@ -142,7 +142,7 @@ function SectionTitle({ children }) {
 }
 
 export function M365ServicesView({ data, isPublic = false }) {
-  const { mailboxes, onedrive, sharepoint, teams, note } = data;
+  const { mailboxes, onedrive, sharepoint, teams, onPremisesSync, note } = data;
   const noData = mailboxes.total === 0 && onedrive.total === 0 && sharepoint.total === 0 && teams.users.total === 0 && teams.teams.total === 0;
 
   return (
@@ -265,6 +265,38 @@ export function M365ServicesView({ data, isPublic = false }) {
         ]}
         emptyMessage="Ningún equipo tuvo actividad en el período"
       />
+
+      <SectionTitle>Sincronización desde Active Directory on-premises</SectionTitle>
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <StatCard label="Cuentas totales" value={fmtInt(onPremisesSync.total)} />
+        <StatCard label="Sincronizadas desde AD on-premises" value={fmtInt(onPremisesSync.hybridCount)} />
+        <StatCard label="Nativas de la nube" value={fmtInt(onPremisesSync.cloudCount)} />
+      </div>
+      <Card className="mt-4">
+        <CardHeader>
+          <CardTitle className="text-base">Cuentas por dominio on-premises</CardTitle>
+          <CardDescription>
+            Dominio de Active Directory on-premises del que viene sincronizada cada cuenta vía Entra Connect
+            (puede ser distinto del dominio del correo).
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {onPremisesSync.byDomain.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">No hay cuentas sincronizadas desde un AD on-premises</p>
+          ) : (
+            <ul className="flex flex-col gap-1 text-sm">
+              {onPremisesSync.byDomain.map(({ domain, count }) => (
+                <li key={domain} className="flex items-center justify-between gap-2 border-b border-border/50 py-1.5 last:border-0">
+                  <span className="font-mono">{domain}</span>
+                  <span className="text-muted-foreground">
+                    {fmtInt(count)} cuenta{count === 1 ? '' : 's'}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
     </>
   );
 }

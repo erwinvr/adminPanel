@@ -185,7 +185,28 @@ export const m365Repository = {
       topTeams: tTop,
     };
 
-    return { mailboxes, onedrive, sharepoint, teams };
+    // Cuentas sincronizadas desde un Active Directory on-premises (Entra Connect),
+    // agrupadas por dominio — viene de `m365_users` (ya sincronizado con el filtro de
+    // dominios permitidos aplicado al guardar, ver replaceSyncedData), no de un informe
+    // de uso separado, así que NO necesita `withDomainFilter` como las secciones de arriba.
+    const [opTotals, opByDomain] = await Promise.all([
+      db('m365_users')
+        .select(db.raw('count(*) as total'), db.raw('count(*) filter (where on_premises_domain_name is not null) as hybrid'))
+        .first(),
+      db('m365_users')
+        .select('on_premises_domain_name as domain', db.raw('count(*) as count'))
+        .whereNotNull('on_premises_domain_name')
+        .groupBy('on_premises_domain_name')
+        .orderBy([{ column: 'count', order: 'desc' }, { column: 'on_premises_domain_name' }]),
+    ]);
+    const onPremisesSync = {
+      total: Number(opTotals.total),
+      hybridCount: Number(opTotals.hybrid),
+      cloudCount: Number(opTotals.total) - Number(opTotals.hybrid),
+      byDomain: opByDomain.map((r) => ({ domain: r.domain, count: Number(r.count) })),
+    };
+
+    return { mailboxes, onedrive, sharepoint, teams, onPremisesSync };
   },
 
   listLicenses() {
